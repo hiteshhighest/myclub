@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../clubs/public_clubs_screen.dart';
 import '../home/home_screen.dart';
 import '../events/events_screen.dart';
 import '../announcements/announcements_screen.dart';
@@ -15,8 +16,9 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = const [
+  late final List<Widget> _screens = const [
     HomeScreen(),
+    PublicClubsScreen(),
     EventsScreen(),
     AnnouncementsScreen(),
     ProfileScreen(),
@@ -38,6 +40,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             icon: Icon(Icons.groups_outlined),
             selectedIcon: Icon(Icons.groups),
             label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
+            label: 'Discover',
           ),
           NavigationDestination(
             icon: Icon(Icons.event_outlined),

@@ -30,6 +30,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
   bool _savingPosition = false;
   bool _generating = false;
   bool _savingClubDetails = false;
+  bool _savingClubVisibility = false;
+  bool _isPublicClub = false;
 
   late String _clubName;
   late String _clubDescription;
@@ -38,7 +40,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
   String? _position;
   String? _positionError;
 
-  bool get _isLeader => widget.role == 'owner' || widget.role == 'executive';
+  bool get _isLeader =>
+      widget.role == 'owner' || widget.role == 'executive';
 
   bool get _isOwner => widget.role == 'owner';
 
@@ -61,7 +64,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
     try {
       final club = await _db
           .from('clubs')
-          .select('name, description, logo_url')
+          .select('name, description, logo_url, is_public')
           .eq('id', widget.clubId)
           .maybeSingle();
       if (!mounted || club == null) return;
@@ -69,10 +72,31 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
         _clubName = club['name']?.toString() ?? _clubName;
         _clubDescription = club['description']?.toString() ?? _clubDescription;
         _clubLogoUrl = club['logo_url']?.toString();
+        _isPublicClub = club['is_public'] == true;
       });
     } catch (_) {
       // Keep the values supplied by the parent if the optional logo column
       // has not been added to the database yet.
+    }
+  }
+
+  Future<void> _setClubVisibility(bool isPublic) async {
+    if (!_isOwner || _savingClubVisibility || isPublic == _isPublicClub) return;
+    setState(() => _savingClubVisibility = true);
+    try {
+      await _db.rpc('set_my_club_visibility', params: {
+        'p_club_id': widget.clubId,
+        'p_is_public': isPublic,
+      });
+      if (!mounted) return;
+      setState(() => _isPublicClub = isPublic);
+      _message(isPublic
+          ? 'Your club is now public and can be discovered.'
+          : 'Your club is now private. Invite-code joining is required.');
+    } catch (error) {
+      _message('Could not update club visibility: $error');
+    } finally {
+      if (mounted) setState(() => _savingClubVisibility = false);
     }
   }
 
@@ -107,8 +131,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                       validator: (value) {
                         final text = value?.trim() ?? '';
                         if (text.isEmpty) return 'Enter a club name.';
-                        if (text.length > 80)
-                          return 'Use 80 characters or fewer.';
+                        if (text.length > 80) return 'Use 80 characters or fewer.';
                         return null;
                       },
                     ),
@@ -125,10 +148,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                     const SizedBox(height: 16),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Club logo',
-                        style: Theme.of(dialogContext).textTheme.titleSmall,
-                      ),
+                      child: Text('Club logo', style: Theme.of(dialogContext).textTheme.titleSmall),
                     ),
                     const SizedBox(height: 8),
                     if (selectedLogoFile != null)
@@ -145,8 +165,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                           ),
                           IconButton(
                             tooltip: 'Remove selected image',
-                            onPressed: () =>
-                                setDialogState(() => selectedLogoFile = null),
+                            onPressed: () => setDialogState(() => selectedLogoFile = null),
                             icon: const Icon(Icons.close),
                           ),
                         ],
@@ -179,21 +198,16 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                       alignment: Alignment.centerLeft,
                       child: OutlinedButton.icon(
                         onPressed: () async {
-                          final picked = await picker.FilePicker.platform
-                              .pickFiles(
-                                type: picker.FileType.image,
-                                allowMultiple: false,
-                                withData: true,
-                              );
+                          final picked = await picker.FilePicker.platform.pickFiles(
+                            type: picker.FileType.image,
+                            allowMultiple: false,
+                            withData: true,
+                          );
                           if (picked == null || picked.files.isEmpty) return;
                           final file = picked.files.single;
                           if (file.bytes == null) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Could not read that image. Please choose it again.',
-                                ),
-                              ),
+                              const SnackBar(content: Text('Could not read that image. Please choose it again.')),
                             );
                             return;
                           }
@@ -222,8 +236,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                       Align(
                         alignment: Alignment.centerLeft,
                         child: TextButton(
-                          onPressed: () =>
-                              setDialogState(() => removeLogo = false),
+                          onPressed: () => setDialogState(() => removeLogo = false),
                           child: const Text('Keep current logo'),
                         ),
                       ),
@@ -267,11 +280,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
       if (selectedLogoFile != null) {
         final file = selectedLogoFile!;
         final extension = (file.extension ?? 'png').toLowerCase();
-        final safeExtension = RegExp(r'^[a-z0-9]{1,8}$').hasMatch(extension)
-            ? extension
-            : 'png';
-        final path =
-            '${widget.clubId}/logo_${DateTime.now().millisecondsSinceEpoch}.$safeExtension';
+        final safeExtension = RegExp(r'^[a-z0-9]{1,8}$').hasMatch(extension) ? extension : 'png';
+        final path = '${widget.clubId}/logo_${DateTime.now().millisecondsSinceEpoch}.$safeExtension';
         final contentType = switch (safeExtension) {
           'jpg' || 'jpeg' => 'image/jpeg',
           'webp' => 'image/webp',
@@ -279,27 +289,22 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
           'svg' => 'image/svg+xml',
           _ => 'image/png',
         };
-        await _db.storage
-            .from('club-logos')
-            .uploadBinary(
-              path,
-              file.bytes!,
-              fileOptions: FileOptions(contentType: contentType, upsert: false),
-            );
+        await _db.storage.from('club-logos').uploadBinary(
+          path,
+          file.bytes!,
+          fileOptions: FileOptions(contentType: contentType, upsert: false),
+        );
         logoUrl = _db.storage.from('club-logos').getPublicUrl(path);
       } else if (result['remove_logo'] == 'true') {
         logoUrl = null;
       }
 
-      await _db.rpc(
-        'update_my_club_details',
-        params: {
-          'p_club_id': widget.clubId,
-          'p_name': result['name'],
-          'p_description': result['description'],
-          'p_logo_url': logoUrl,
-        },
-      );
+      await _db.rpc('update_my_club_details', params: {
+        'p_club_id': widget.clubId,
+        'p_name': result['name'],
+        'p_description': result['description'],
+        'p_logo_url': logoUrl,
+      });
       if (!mounted) return;
       setState(() {
         _clubName = result['name']!;
@@ -358,7 +363,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
     try {
       final result = await _db.rpc(
         'set_my_club_position',
-        params: {'p_club_id': widget.clubId, 'p_position': value},
+        params: {
+          'p_club_id': widget.clubId,
+          'p_position': value,
+        },
       );
 
       if (!mounted) return;
@@ -454,45 +462,45 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-          title: const Text('Permanently delete club?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'This permanently deletes ${_clubName}, its membership, '
-                'events, announcements, and chat history. This cannot be undone.',
-              ),
-              const SizedBox(height: 14),
-              Text('Type "${_clubName}" to confirm.'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                onChanged: (_) => setDialogState(() {}),
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  hintText: 'Club name',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
+        title: const Text('Permanently delete club?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This permanently deletes ${_clubName}, its membership, '
+              'events, announcements, and chat history. This cannot be undone.',
             ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(dialogContext).colorScheme.error,
-                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            const SizedBox(height: 14),
+            Text('Type "${_clubName}" to confirm.'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              onChanged: (_) => setDialogState(() {}),
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Club name',
               ),
-              onPressed: controller.text.trim() == _clubName.trim()
-                  ? () => Navigator.pop(dialogContext, true)
-                  : null,
-              child: const Text('Delete permanently'),
             ),
           ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+              foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+            ),
+            onPressed: controller.text.trim() == _clubName.trim()
+                ? () => Navigator.pop(dialogContext, true)
+                : null,
+            child: const Text('Delete permanently'),
+          ),
+        ],
         ),
       ),
     );
@@ -522,9 +530,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
 
       if (!mounted) return;
       if (memberships.isEmpty) {
-        _message(
-          'Invite at least one other member before transferring ownership.',
-        );
+        _message('Invite at least one other member before transferring ownership.');
         return;
       }
 
@@ -537,8 +543,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
         for (final profile in profiles)
           profile['id'].toString():
               (profile['display_name']?.toString().trim().isNotEmpty ?? false)
-              ? profile['display_name'].toString().trim()
-              : 'Club member',
+                  ? profile['display_name'].toString().trim()
+                  : 'Club member',
       };
 
       if (!mounted) return;
@@ -554,9 +560,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                 final id = membership['user_id'].toString();
                 final role = membership['role']?.toString() ?? 'member';
                 return ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.person_outline),
-                  ),
+                  leading: const CircleAvatar(child: Icon(Icons.person_outline)),
                   title: Text(names[id] ?? 'Club member'),
                   subtitle: Text(role == 'executive' ? 'Executive' : 'Member'),
                   onTap: () => Navigator.pop(dialogContext, id),
@@ -597,10 +601,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
       );
       if (confirmed != true || !mounted) return;
 
-      await _db.rpc(
-        'transfer_club_ownership',
-        params: {'p_club_id': widget.clubId, 'p_new_owner_id': targetId},
-      );
+      await _db.rpc('transfer_club_ownership', params: {
+        'p_club_id': widget.clubId,
+        'p_new_owner_id': targetId,
+      });
       await _db.rpc('leave_my_club', params: {'p_club_id': widget.clubId});
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -634,12 +638,16 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Invites ${role == 'member' ? 'members' : 'executives'}'),
+              Text(
+                'Invites ${role == 'member' ? 'members' : 'executives'}',
+              ),
               const SizedBox(height: 16),
               SelectableText(
                 code,
-                style: Theme.of(context).textTheme.headlineSmall
-                    ?.copyWith(fontWeight: FontWeight.bold, letterSpacing: 2),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 2,
+                    ),
               ),
               const SizedBox(height: 12),
               const Text('No expiry or usage limit.'),
@@ -674,8 +682,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
 
   void _message(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -686,7 +695,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
       length: 5,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_clubName, maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: Text(
+            _clubName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           bottom: const TabBar(
             isScrollable: true,
             tabs: [
@@ -701,8 +714,14 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
         body: TabBarView(
           children: [
             _buildOverview(theme),
-            _AnnouncementsTab(clubId: widget.clubId, canManage: _isLeader),
-            _EventsTab(clubId: widget.clubId, canManage: _isLeader),
+            _AnnouncementsTab(
+              clubId: widget.clubId,
+              canManage: _isLeader,
+            ),
+            _EventsTab(
+              clubId: widget.clubId,
+              canManage: _isLeader,
+            ),
             _MembersTab(clubId: widget.clubId, currentUserRole: widget.role),
             _ClubChatTab(clubId: widget.clubId),
           ],
@@ -729,11 +748,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                 ? NetworkImage(_clubLogoUrl!)
                 : null,
             child: _clubLogoUrl == null || _clubLogoUrl!.isEmpty
-                ? Icon(
-                    Icons.groups_rounded,
-                    size: 40,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  )
+                ? Icon(Icons.groups_rounded, size: 40, color: theme.colorScheme.onPrimaryContainer)
                 : null,
           ),
         ),
@@ -758,13 +773,23 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
           OutlinedButton.icon(
             onPressed: _savingClubDetails ? null : _editClubDetails,
             icon: _savingClubDetails
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.edit_outlined),
             label: const Text('Edit club details'),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: SwitchListTile.adaptive(
+              value: _isPublicClub,
+              onChanged: _savingClubVisibility ? null : _setClubVisibility,
+              title: const Text('Public club'),
+              subtitle: Text(_isPublicClub
+                  ? 'Discoverable in Public Clubs. Anyone signed in can join without an invite code.'
+                  : 'Private club. People need an invite code to join.'),
+              secondary: _savingClubVisibility
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))
+                  : Icon(_isPublicClub ? Icons.public : Icons.lock_outline),
+            ),
           ),
         ],
         const SizedBox(height: 24),
@@ -773,7 +798,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
             leading: const Icon(Icons.badge_outlined),
             title: const Text('Your role'),
             subtitle: Text(roleLabel),
-            trailing: _isOwner ? const Icon(Icons.verified_outlined) : null,
+            trailing: _isOwner
+                ? const Icon(Icons.verified_outlined)
+                : null,
           ),
         ),
         const SizedBox(height: 24),
@@ -858,10 +885,13 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text('Invite people to join your club using a shareable code.'),
+          const Text(
+            'Invite people to join your club using a shareable code.',
+          ),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: _generating ? null : () => _generateInviteCode('member'),
+            onPressed:
+                _generating ? null : () => _generateInviteCode('member'),
             icon: const Icon(Icons.person_add_alt_1),
             label: const Text('Invite members'),
           ),
@@ -886,7 +916,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
         const SizedBox(height: 8),
         Card(
           child: ListTile(
-            leading: Icon(Icons.logout_rounded, color: theme.colorScheme.error),
+            leading: Icon(
+              Icons.logout_rounded,
+              color: theme.colorScheme.error,
+            ),
             title: Text(
               'Leave club',
               style: TextStyle(color: theme.colorScheme.error),
@@ -913,7 +946,10 @@ class _AnnouncementsTab extends StatefulWidget {
   final String clubId;
   final bool canManage;
 
-  const _AnnouncementsTab({required this.clubId, required this.canManage});
+  const _AnnouncementsTab({
+    required this.clubId,
+    required this.canManage,
+  });
 
   @override
   State<_AnnouncementsTab> createState() => _AnnouncementsTabState();
@@ -941,14 +977,17 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
 
   void _message(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   void _openProfile(String userId) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ProfileViewScreen(userId: userId)),
+      MaterialPageRoute(
+        builder: (_) => ProfileViewScreen(userId: userId),
+      ),
     );
   }
 
@@ -1002,8 +1041,10 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
             .order('created_at'),
       ]);
 
-      final announcements = List<Map<String, dynamic>>.from(results[0]);
-      final attachmentRows = List<Map<String, dynamic>>.from(results[1]);
+      final announcements =
+          List<Map<String, dynamic>>.from(results[0]);
+      final attachmentRows =
+          List<Map<String, dynamic>>.from(results[1]);
 
       // Fetch visible author profiles separately so profile RLS rules remain active.
       final authorIds = announcements
@@ -1016,14 +1057,11 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
         try {
           final profiles = await _db
               .from('profiles')
-              .select(
-                'id, display_name, avatar_url, bio, is_profile_public, show_clubs',
-              )
+              .select('id, display_name, avatar_url, bio, is_profile_public, show_clubs')
               .inFilter('id', authorIds);
           for (final profile in profiles) {
-            profilesById[profile['id'].toString()] = Map<String, dynamic>.from(
-              profile,
-            );
+            profilesById[profile['id'].toString()] =
+                Map<String, dynamic>.from(profile);
           }
         } catch (_) {
           // Announcements should still load if profile visibility blocks this query.
@@ -1148,8 +1186,8 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                         ),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
-                            ? 'Enter a title'
-                            : null,
+                                ? 'Enter a title'
+                                : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
@@ -1164,8 +1202,8 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                         ),
                         validator: (value) =>
                             value == null || value.trim().isEmpty
-                            ? 'Enter the announcement'
-                            : null,
+                                ? 'Enter the announcement'
+                                : null,
                       ),
                       DropdownButtonFormField<String>(
                         value: visibility,
@@ -1203,7 +1241,8 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Attachments',
-                          style: Theme.of(dialogContext).textTheme.titleMedium,
+                          style:
+                              Theme.of(dialogContext).textTheme.titleMedium,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -1241,7 +1280,9 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                             tooltip: 'Remove attachment',
                             icon: const Icon(Icons.close),
                             onPressed: () {
-                              setDialogState(() => selectedFiles.remove(file));
+                              setDialogState(
+                                () => selectedFiles.remove(file),
+                              );
                             },
                           ),
                         ),
@@ -1312,18 +1353,18 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
             '_',
           );
 
-          final path =
-              '${widget.clubId}/$announcementId/'
+          final path = '${widget.clubId}/$announcementId/'
               '${DateTime.now().microsecondsSinceEpoch}_${i}_$safeName';
 
           final mime = _fileType(file.name);
 
-          await _db.storage
-              .from(_bucket)
-              .uploadBinary(
+          await _db.storage.from(_bucket).uploadBinary(
                 path,
                 bytes,
-                fileOptions: FileOptions(contentType: mime, upsert: false),
+                fileOptions: FileOptions(
+                  contentType: mime,
+                  upsert: false,
+                ),
               );
 
           uploadedPaths.add(path);
@@ -1351,7 +1392,10 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
           }
 
           if (announcementId != null) {
-            await _db.from('announcements').delete().eq('id', announcementId);
+            await _db
+                .from('announcements')
+                .delete()
+                .eq('id', announcementId);
           }
         } catch (_) {
           // Preserve the original error.
@@ -1367,7 +1411,9 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     }
   }
 
-  Future<void> _openAttachment(Map<String, dynamic> attachment) async {
+  Future<void> _openAttachment(
+    Map<String, dynamic> attachment,
+  ) async {
     try {
       final path = attachment['storage_path'].toString();
 
@@ -1482,149 +1528,158 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-              ? _ErrorView(message: _error!, onRetry: _load)
-              : _items.isEmpty
-              ? const _EmptyView(
-                  icon: Icons.campaign_outlined,
-                  title: 'No announcements yet',
-                  subtitle: 'Club updates will appear here.',
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _items.length,
-                    itemBuilder: (context, index) {
-                      final item = _items[index];
-                      final pinned = item['is_pinned'] == true;
-                      final id = item['id'].toString();
-                      final files = _attachments[id] ?? [];
+                  ? _ErrorView(message: _error!, onRetry: _load)
+                  : _items.isEmpty
+                      ? const _EmptyView(
+                          icon: Icons.campaign_outlined,
+                          title: 'No announcements yet',
+                          subtitle: 'Club updates will appear here.',
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _items.length,
+                            itemBuilder: (context, index) {
+                              final item = _items[index];
+                              final pinned = item['is_pinned'] == true;
+                              final id = item['id'].toString();
+                              final files = _attachments[id] ?? [];
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      item['title']?.toString() ?? '',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              item['title']?.toString() ?? '',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                  ),
+                                            ),
                                           ),
-                                    ),
-                                  ),
-                                  if (pinned)
-                                    const Icon(Icons.push_pin, size: 18),
-                                  if (widget.canManage)
-                                    PopupMenuButton<String>(
-                                      onSelected: (action) {
-                                        if (action == 'pin') {
-                                          _togglePin(item);
-                                        } else if (action == 'delete') {
-                                          _delete(item);
-                                        }
-                                      },
-                                      itemBuilder: (_) => [
-                                        PopupMenuItem(
-                                          value: 'pin',
-                                          child: Text(pinned ? 'Unpin' : 'Pin'),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Text('Delete'),
-                                        ),
-                                      ],
-                                    ),
-                                ],
-                              ),
-                              if (item['visibility'] == 'executives')
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Chip(
-                                      avatar: const Icon(
-                                        Icons.admin_panel_settings_outlined,
-                                        size: 16,
+                                          if (pinned)
+                                            const Icon(
+                                              Icons.push_pin,
+                                              size: 18,
+                                            ),
+                                          if (widget.canManage)
+                                            PopupMenuButton<String>(
+                                              onSelected: (action) {
+                                                if (action == 'pin') {
+                                                  _togglePin(item);
+                                                } else if (action == 'delete') {
+                                                  _delete(item);
+                                                }
+                                              },
+                                              itemBuilder: (_) => [
+                                                PopupMenuItem(
+                                                  value: 'pin',
+                                                  child: Text(
+                                                    pinned ? 'Unpin' : 'Pin',
+                                                  ),
+                                                ),
+                                                const PopupMenuItem(
+                                                  value: 'delete',
+                                                  child: Text('Delete'),
+                                                ),
+                                              ],
+                                            ),
+                                        ],
                                       ),
-                                      label: const Text('Executive Only'),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
+                                      if (item['visibility'] == 'executives')
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 8),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Chip(
+                                              avatar: const Icon(
+                                                Icons.admin_panel_settings_outlined,
+                                                size: 16,
+                                              ),
+                                              label: const Text('Executive Only'),
+                                              visualDensity: VisualDensity.compact,
+                                            ),
+                                          ),
+                                        ),
+                                      const SizedBox(height: 8),
+                                      _AnnouncementAuthorRow(
+                                        profile: item['author_profile'] is Map
+                                            ? Map<String, dynamic>.from(item['author_profile'] as Map)
+                                            : null,
+                                        onTap: (item['created_by']?.toString().isNotEmpty ?? false)
+                                            ? () => _openProfile(item['created_by'].toString())
+                                            : null,
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(item['body']?.toString() ?? ''),
+                                      if (files.isNotEmpty) ...[
+                                        const SizedBox(height: 16),
+                                        const Divider(),
+                                        const Text(
+                                          'Attachments',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        for (final file in files)
+                                          ListTile(
+                                            contentPadding: EdgeInsets.zero,
+                                            leading: Icon(
+                                              file['mime_type']
+                                                          ?.toString()
+                                                          .startsWith('image/') ==
+                                                      true
+                                                  ? Icons.image_outlined
+                                                  : file['mime_type'] ==
+                                                          'application/pdf'
+                                                      ? Icons
+                                                          .picture_as_pdf_outlined
+                                                      : Icons
+                                                          .attach_file_outlined,
+                                            ),
+                                            title: Text(
+                                              file['file_name']?.toString() ??
+                                                  'Attachment',
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            subtitle: Text(
+                                              _fileSize(file['size_bytes']),
+                                            ),
+                                            trailing: const Icon(
+                                              Icons.open_in_new,
+                                            ),
+                                            onTap: () =>
+                                                _openAttachment(file),
+                                          ),
+                                      ],
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        _dateLabel(item['created_at']),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall,
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              const SizedBox(height: 8),
-                              _AnnouncementAuthorRow(
-                                profile: item['author_profile'] is Map
-                                    ? Map<String, dynamic>.from(
-                                        item['author_profile'] as Map,
-                                      )
-                                    : null,
-                                onTap:
-                                    (item['created_by']
-                                            ?.toString()
-                                            .isNotEmpty ??
-                                        false)
-                                    ? () => _openProfile(
-                                        item['created_by'].toString(),
-                                      )
-                                    : null,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(item['body']?.toString() ?? ''),
-                              if (files.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                const Divider(),
-                                const Text(
-                                  'Attachments',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                for (final file in files)
-                                  ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: Icon(
-                                      file['mime_type']?.toString().startsWith(
-                                                'image/',
-                                              ) ==
-                                              true
-                                          ? Icons.image_outlined
-                                          : file['mime_type'] ==
-                                                'application/pdf'
-                                          ? Icons.picture_as_pdf_outlined
-                                          : Icons.attach_file_outlined,
-                                    ),
-                                    title: Text(
-                                      file['file_name']?.toString() ??
-                                          'Attachment',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      _fileSize(file['size_bytes']),
-                                    ),
-                                    trailing: const Icon(Icons.open_in_new),
-                                    onTap: () => _openAttachment(file),
-                                  ),
-                              ],
-                              const SizedBox(height: 12),
-                              Text(
-                                _dateLabel(item['created_at']),
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ],
+                              );
+                            },
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
         ),
       ],
     );
@@ -1639,7 +1694,10 @@ class _EventsTab extends StatefulWidget {
   final String clubId;
   final bool canManage;
 
-  const _EventsTab({required this.clubId, required this.canManage});
+  const _EventsTab({
+    required this.clubId,
+    required this.canManage,
+  });
 
   @override
   State<_EventsTab> createState() => _EventsTabState();
@@ -1662,8 +1720,9 @@ class _EventsTabState extends State<_EventsTab> {
 
   void _message(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   Future<void> _load() async {
@@ -1722,8 +1781,8 @@ class _EventsTabState extends State<_EventsTab> {
                       ),
                       validator: (value) =>
                           value == null || value.trim().isEmpty
-                          ? 'Enter an event name'
-                          : null,
+                              ? 'Enter an event name'
+                              : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
@@ -1941,115 +2000,121 @@ class _EventsTabState extends State<_EventsTab> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
-              ? _ErrorView(message: _error!, onRetry: _load)
-              : _events.isEmpty
-              ? const _EmptyView(
-                  icon: Icons.event_outlined,
-                  title: 'No events scheduled',
-                  subtitle: 'Upcoming club activities will appear here.',
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _events.length,
-                    itemBuilder: (context, index) {
-                      final event = _events[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      event['title']?.toString() ?? '',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
+                  ? _ErrorView(message: _error!, onRetry: _load)
+                  : _events.isEmpty
+                      ? const _EmptyView(
+                          icon: Icons.event_outlined,
+                          title: 'No events scheduled',
+                          subtitle: 'Upcoming club activities will appear here.',
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _events.length,
+                            itemBuilder: (context, index) {
+                              final event = _events[index];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              event['title']?.toString() ?? '',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                            ),
                                           ),
-                                    ),
-                                  ),
-                                  if (widget.canManage)
-                                    PopupMenuButton<String>(
-                                      onSelected: (action) {
-                                        if (action == 'delete') {
-                                          _deleteEvent(event);
-                                        }
-                                      },
-                                      itemBuilder: (_) => const [
-                                        PopupMenuItem(
-                                          value: 'delete',
-                                          child: Text('Delete event'),
+                                          if (widget.canManage)
+                                            PopupMenuButton<String>(
+                                              onSelected: (action) {
+                                                if (action == 'delete') {
+                                                  _deleteEvent(event);
+                                                }
+                                              },
+                                              itemBuilder: (_) => const [
+                                                PopupMenuItem(
+                                                  value: 'delete',
+                                                  child: Text('Delete event'),
+                                                ),
+                                              ],
+                                            ),
+                                        ],
+                                      ),
+                                      if (event['visibility'] == 'executives')
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 8),
+                                          child: Align(
+                                            alignment: Alignment.centerLeft,
+                                            child: Chip(
+                                              avatar: const Icon(
+                                                Icons.admin_panel_settings_outlined,
+                                                size: 16,
+                                              ),
+                                              label: const Text('Executive Only'),
+                                              visualDensity: VisualDensity.compact,
+                                            ),
+                                          ),
+                                        ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.calendar_today_outlined,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _dateLabel(event['starts_at']),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if ((event['location'] ?? '')
+                                          .toString()
+                                          .isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.location_on_outlined,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                event['location'].toString(),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
-                                    ),
-                                ],
-                              ),
-                              if (event['visibility'] == 'executives')
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Chip(
-                                      avatar: const Icon(
-                                        Icons.admin_panel_settings_outlined,
-                                        size: 16,
-                                      ),
-                                      label: const Text('Executive Only'),
-                                      visualDensity: VisualDensity.compact,
-                                    ),
+                                      if ((event['description'] ?? '')
+                                          .toString()
+                                          .isNotEmpty) ...[
+                                        const SizedBox(height: 12),
+                                        Text(event['description'].toString()),
+                                      ],
+                                    ],
                                   ),
                                 ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.calendar_today_outlined,
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(_dateLabel(event['starts_at'])),
-                                  ),
-                                ],
-                              ),
-                              if ((event['location'] ?? '')
-                                  .toString()
-                                  .isNotEmpty) ...[
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.location_on_outlined,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(event['location'].toString()),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                              if ((event['description'] ?? '')
-                                  .toString()
-                                  .isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                Text(event['description'].toString()),
-                              ],
-                            ],
+                              );
+                            },
                           ),
                         ),
-                      );
-                    },
-                  ),
-                ),
         ),
       ],
     );
@@ -2064,7 +2129,10 @@ class _MembersTab extends StatefulWidget {
   final String clubId;
   final String currentUserRole;
 
-  const _MembersTab({required this.clubId, required this.currentUserRole});
+  const _MembersTab({
+    required this.clubId,
+    required this.currentUserRole,
+  });
 
   @override
   State<_MembersTab> createState() => _MembersTabState();
@@ -2101,15 +2169,12 @@ class _MembersTabState extends State<_MembersTab> {
       if (ids.isNotEmpty) {
         final profiles = await _db
             .from('profiles')
-            .select(
-              'id, display_name, avatar_url, bio, is_profile_public, show_clubs',
-            )
+            .select('id, display_name, avatar_url, bio, is_profile_public, show_clubs')
             .inFilter('id', ids);
 
         for (final profile in profiles) {
-          profilesById[profile['id'].toString()] = Map<String, dynamic>.from(
-            profile,
-          );
+          profilesById[profile['id'].toString()] =
+              Map<String, dynamic>.from(profile);
         }
       }
 
@@ -2146,10 +2211,7 @@ class _MembersTabState extends State<_MembersTab> {
     return widget.currentUserRole == 'executive' && targetRole == 'member';
   }
 
-  Future<void> _kickMember(
-    Map<String, dynamic> member,
-    String displayName,
-  ) async {
+  Future<void> _kickMember(Map<String, dynamic> member, String displayName) async {
     final targetUserId = member['user_id'].toString();
     final targetRole = member['role']?.toString() ?? 'member';
     if (!_canKick(targetRole, targetUserId)) return;
@@ -2157,9 +2219,7 @@ class _MembersTabState extends State<_MembersTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(
-          targetRole == 'executive' ? 'Remove executive?' : 'Kick member?',
-        ),
+        title: Text(targetRole == 'executive' ? 'Remove executive?' : 'Kick member?'),
         content: Text(
           'Remove $displayName from this club? They will lose access to its member-only content.',
         ),
@@ -2178,10 +2238,10 @@ class _MembersTabState extends State<_MembersTab> {
     if (confirmed != true || !mounted) return;
 
     try {
-      await _db.rpc(
-        'kick_club_member',
-        params: {'p_club_id': widget.clubId, 'p_target_user_id': targetUserId},
-      );
+      await _db.rpc('kick_club_member', params: {
+        'p_club_id': widget.clubId,
+        'p_target_user_id': targetUserId,
+      });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('$displayName was removed from the club.')),
@@ -2198,7 +2258,9 @@ class _MembersTabState extends State<_MembersTab> {
   void _openProfile(String userId) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => ProfileViewScreen(userId: userId)),
+      MaterialPageRoute(
+        builder: (_) => ProfileViewScreen(userId: userId),
+      ),
     );
   }
 
@@ -2238,9 +2300,8 @@ class _MembersTabState extends State<_MembersTab> {
           final role = member['role']?.toString() ?? 'member';
           final position = member['position']?.toString().trim() ?? '';
 
-          final displayName = name == null || name.isEmpty
-              ? 'Club member'
-              : name;
+          final displayName =
+              name == null || name.isEmpty ? 'Club member' : name;
 
           final roleLabel = switch (role) {
             'owner' => 'Owner',
@@ -2256,11 +2317,7 @@ class _MembersTabState extends State<_MembersTab> {
                     ? NetworkImage(avatarUrl)
                     : null,
                 child: avatarUrl == null || avatarUrl.isEmpty
-                    ? Text(
-                        displayName.isEmpty
-                            ? '?'
-                            : displayName.substring(0, 1).toUpperCase(),
-                      )
+                    ? Text(displayName.isEmpty ? '?' : displayName.substring(0, 1).toUpperCase())
                     : null,
               ),
               title: Text(displayName),
@@ -2280,9 +2337,7 @@ class _MembersTabState extends State<_MembersTab> {
                           PopupMenuItem(
                             value: 'kick',
                             child: Text(
-                              role == 'executive'
-                                  ? 'Remove executive'
-                                  : 'Kick member',
+                              role == 'executive' ? 'Remove executive' : 'Kick member',
                             ),
                           ),
                       ],
@@ -2330,9 +2385,7 @@ class _ClubChatTabState extends State<_ClubChatTab> {
     final userId = _db.auth.currentUser?.id;
     if (message.isEmpty || userId == null || _sending) return;
     if (message.length > 2000) {
-      setState(
-        () => _sendError = 'Messages must be 2,000 characters or fewer.',
-      );
+      setState(() => _sendError = 'Messages must be 2,000 characters or fewer.');
       return;
     }
 
@@ -2348,8 +2401,7 @@ class _ClubChatTabState extends State<_ClubChatTab> {
       });
       _messageController.clear();
     } catch (error) {
-      if (mounted)
-        setState(() => _sendError = 'Could not send message: $error');
+      if (mounted) setState(() => _sendError = 'Could not send message: $error');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -2360,14 +2412,9 @@ class _ClubChatTabState extends State<_ClubChatTab> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete message?'),
-        content: const Text(
-          'This message will be permanently deleted for everyone in the club.',
-        ),
+        content: const Text('This message will be permanently deleted for everyone in the club.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(dialogContext).colorScheme.error,
@@ -2381,10 +2428,7 @@ class _ClubChatTabState extends State<_ClubChatTab> {
     );
     if (confirmed != true || !mounted) return;
     try {
-      await _db
-          .from('club_chat_messages')
-          .delete()
-          .eq('id', message['id'].toString());
+      await _db.from('club_chat_messages').delete().eq('id', message['id'].toString());
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2417,7 +2461,9 @@ class _ClubChatTabState extends State<_ClubChatTab> {
         .from('profiles')
         .select('id, display_name, avatar_url')
         .inFilter('id', ids);
-    return {for (final profile in profiles) profile['id'].toString(): profile};
+    return {
+      for (final profile in profiles) profile['id'].toString(): profile,
+    };
   }
 
   @override
@@ -2436,13 +2482,11 @@ class _ClubChatTabState extends State<_ClubChatTab> {
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return _ErrorView(
-                  message:
-                      'Could not load club chat. Check that the chat migration has been applied and Realtime is enabled. ${snapshot.error}',
+                  message: 'Could not load club chat. Check that the chat migration has been applied and Realtime is enabled. ${snapshot.error}',
                   onRetry: () async => setState(() {}),
                 );
               }
-              if (!snapshot.hasData)
-                return const Center(child: CircularProgressIndicator());
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               final messages = snapshot.data!;
               if (messages.isNotEmpty) {
                 final newestId = messages.last['id']?.toString();
@@ -2479,103 +2523,62 @@ class _ClubChatTabState extends State<_ClubChatTab> {
                       final senderId = message['sender_id']?.toString() ?? '';
                       final isMine = senderId == currentUserId;
                       final profile = profiles[senderId];
-                      final rawName =
-                          profile?['display_name']?.toString().trim() ?? '';
-                      final senderName = rawName.isEmpty
-                          ? (isMine ? 'You' : 'Club member')
-                          : rawName;
+                      final rawName = profile?['display_name']?.toString().trim() ?? '';
+                      final senderName = rawName.isEmpty ? (isMine ? 'You' : 'Club member') : rawName;
                       final avatarUrl = profile?['avatar_url']?.toString();
                       final text = message['message']?.toString() ?? '';
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisAlignment: isMine
-                              ? MainAxisAlignment.end
-                              : MainAxisAlignment.start,
+                          mainAxisAlignment: isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
                           children: [
                             if (!isMine) ...[
                               CircleAvatar(
                                 radius: 17,
-                                backgroundImage:
-                                    avatarUrl != null && avatarUrl.isNotEmpty
-                                    ? NetworkImage(avatarUrl)
-                                    : null,
+                                backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
                                 child: avatarUrl == null || avatarUrl.isEmpty
-                                    ? Text(
-                                        senderName.isEmpty
-                                            ? '?'
-                                            : senderName
-                                                  .substring(0, 1)
-                                                  .toUpperCase(),
-                                      )
+                                    ? Text(senderName.isEmpty ? '?' : senderName.substring(0, 1).toUpperCase())
                                     : null,
                               ),
                               const SizedBox(width: 8),
                             ],
                             Flexible(
                               child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 520,
-                                ),
+                                constraints: const BoxConstraints(maxWidth: 520),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                   decoration: BoxDecoration(
-                                    color: isMine
-                                        ? theme.colorScheme.primaryContainer
-                                        : theme
-                                              .colorScheme
-                                              .surfaceContainerHighest,
+                                    color: isMine ? theme.colorScheme.primaryContainer : theme.colorScheme.surfaceContainerHighest,
                                     borderRadius: BorderRadius.only(
                                       topLeft: const Radius.circular(16),
                                       topRight: const Radius.circular(16),
-                                      bottomLeft: Radius.circular(
-                                        isMine ? 16 : 4,
-                                      ),
-                                      bottomRight: Radius.circular(
-                                        isMine ? 4 : 16,
-                                      ),
+                                      bottomLeft: Radius.circular(isMine ? 16 : 4),
+                                      bottomRight: Radius.circular(isMine ? 4 : 16),
                                     ),
                                   ),
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Flexible(
-                                            child: Text(
-                                              senderName,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: theme.textTheme.labelMedium
-                                                  ?.copyWith(
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                            ),
+                                            child: Text(senderName, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold)),
                                           ),
                                           if (isMine) ...[
                                             const SizedBox(width: 4),
                                             PopupMenuButton<String>(
                                               padding: EdgeInsets.zero,
-                                              constraints: const BoxConstraints(
-                                                minWidth: 120,
-                                              ),
+                                              constraints: const BoxConstraints(minWidth: 120),
                                               tooltip: 'Message actions',
                                               iconSize: 18,
                                               onSelected: (action) {
-                                                if (action == 'delete')
-                                                  _deleteMessage(message);
+                                                if (action == 'delete') _deleteMessage(message);
                                               },
                                               itemBuilder: (_) => const [
-                                                PopupMenuItem(
-                                                  value: 'delete',
-                                                  child: Text('Delete message'),
-                                                ),
+                                                PopupMenuItem(value: 'delete', child: Text('Delete message')),
                                               ],
                                             ),
                                           ],
@@ -2585,10 +2588,7 @@ class _ClubChatTabState extends State<_ClubChatTab> {
                                       const SizedBox(height: 4),
                                       Align(
                                         alignment: Alignment.bottomRight,
-                                        child: Text(
-                                          _timeLabel(message['created_at']),
-                                          style: theme.textTheme.labelSmall,
-                                        ),
+                                        child: Text(_timeLabel(message['created_at']), style: theme.textTheme.labelSmall),
                                       ),
                                     ],
                                   ),
@@ -2609,10 +2609,7 @@ class _ClubChatTabState extends State<_ClubChatTab> {
         if (_sendError != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-            child: Text(
-              _sendError!,
-              style: TextStyle(color: theme.colorScheme.error),
-            ),
+            child: Text(_sendError!, style: TextStyle(color: theme.colorScheme.error)),
           ),
         SafeArea(
           top: false,
@@ -2641,11 +2638,7 @@ class _ClubChatTabState extends State<_ClubChatTab> {
                   tooltip: 'Send message',
                   onPressed: _sending ? null : _sendMessage,
                   icon: _sending
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.send_rounded),
                 ),
               ],
@@ -2682,7 +2675,11 @@ class _EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 52, color: theme.colorScheme.primary),
+            Icon(
+              icon,
+              size: 52,
+              color: theme.colorScheme.primary,
+            ),
             const SizedBox(height: 16),
             Text(
               title,
@@ -2708,7 +2705,10 @@ class _ErrorView extends StatelessWidget {
   final String message;
   final Future<void> Function() onRetry;
 
-  const _ErrorView({required this.message, required this.onRetry});
+  const _ErrorView({
+    required this.message,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2741,6 +2741,7 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
+
 // -----------------------------------------------------------------------------
 // PROFILE VIEWER
 // -----------------------------------------------------------------------------
@@ -2758,8 +2759,8 @@ class _AnnouncementAuthorRow extends StatelessWidget {
     final name = !isPublic
         ? 'Private profile'
         : rawName.isEmpty
-        ? 'Club member'
-        : rawName;
+            ? 'Club member'
+            : rawName;
     final authorProfile = profile;
     final String? avatarUrl;
     if (isPublic && authorProfile != null) {
@@ -2788,11 +2789,11 @@ class _AnnouncementAuthorRow extends StatelessWidget {
             child: Text(
               'Posted by $name',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: onTap == null
-                    ? Theme.of(context).colorScheme.onSurfaceVariant
-                    : Theme.of(context).colorScheme.primary,
-                fontWeight: FontWeight.w600,
-              ),
+                    color: onTap == null
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -2837,9 +2838,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
     try {
       final result = await _db
           .from('profiles')
-          .select(
-            'id, display_name, bio, avatar_url, is_profile_public, show_clubs',
-          )
+          .select('id, display_name, bio, avatar_url, is_profile_public, show_clubs')
           .eq('id', widget.userId)
           .maybeSingle();
 
@@ -2873,9 +2872,7 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
               .select('club_id, clubs(id, name, description)')
               .eq('user_id', widget.userId);
           clubs = List<Map<String, dynamic>>.from(
-            (memberships as List).map(
-              (row) => Map<String, dynamic>.from(row as Map),
-            ),
+            (memberships as List).map((row) => Map<String, dynamic>.from(row as Map)),
           );
         } catch (_) {
           // A user's club list may be hidden by membership RLS policies.
@@ -2909,113 +2906,92 @@ class _ProfileViewScreenState extends State<ProfileViewScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.cloud_off_outlined, size: 44),
-                    const SizedBox(height: 12),
-                    const Text('Could not load this profile.'),
-                    const SizedBox(height: 8),
-                    Text(_error!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(
-                      onPressed: _loadProfile,
-                      child: const Text('Try again'),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : _privateOrUnavailable
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: const [
-                    Icon(Icons.lock_outline, size: 56),
-                    SizedBox(height: 16),
-                    Text(
-                      'This profile is private or unavailable.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                Center(
-                  child: CircleAvatar(
-                    radius: 52,
-                    backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
-                        ? NetworkImage(avatarUrl)
-                        : null,
-                    child: avatarUrl == null || avatarUrl.isEmpty
-                        ? const Icon(Icons.person_outline, size: 52)
-                        : null,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  displayName,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                Card(
+              ? Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(24),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          'About',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
+                        const Icon(Icons.cloud_off_outlined, size: 44),
+                        const SizedBox(height: 12),
+                        const Text('Could not load this profile.'),
                         const SizedBox(height: 8),
-                        Text(
-                          (profile?['bio']?.toString().trim().isNotEmpty ??
-                                  false)
-                              ? profile!['bio'].toString()
-                              : 'No bio added yet.',
-                        ),
+                        Text(_error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        FilledButton(onPressed: _loadProfile, child: const Text('Try again')),
                       ],
                     ),
                   ),
-                ),
-                if (profile?['show_clubs'] == true) ...[
-                  const SizedBox(height: 20),
-                  Text(
-                    'Clubs',
-                    style: Theme.of(context).textTheme.titleLarge
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  if (_clubs.isEmpty)
-                    const Text('No clubs to display.')
-                  else
-                    for (final membership in _clubs)
-                      Card(
-                        child: ListTile(
-                          leading: const Icon(Icons.groups_outlined),
-                          title: Text(
-                            (membership['clubs'] is Map
-                                    ? (membership['clubs'] as Map)['name']
-                                          ?.toString()
-                                    : null) ??
-                                'Club',
-                          ),
+                )
+              : _privateOrUnavailable
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.lock_outline, size: 56),
+                            SizedBox(height: 16),
+                            Text('This profile is private or unavailable.', textAlign: TextAlign.center),
+                          ],
                         ),
                       ),
-                ],
-              ],
-            ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        Center(
+                          child: CircleAvatar(
+                            radius: 52,
+                            backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                                ? NetworkImage(avatarUrl)
+                                : null,
+                            child: avatarUrl == null || avatarUrl.isEmpty
+                                ? const Icon(Icons.person_outline, size: 52)
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          displayName,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 20),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('About', style: Theme.of(context).textTheme.titleMedium),
+                                const SizedBox(height: 8),
+                                Text((profile?['bio']?.toString().trim().isNotEmpty ?? false)
+                                    ? profile!['bio'].toString()
+                                    : 'No bio added yet.'),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (profile?['show_clubs'] == true) ...[
+                          const SizedBox(height: 20),
+                          Text('Clubs', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          if (_clubs.isEmpty)
+                            const Text('No clubs to display.')
+                          else
+                            for (final membership in _clubs)
+                              Card(
+                                child: ListTile(
+                                  leading: const Icon(Icons.groups_outlined),
+                                  title: Text((membership['clubs'] is Map
+                                          ? (membership['clubs'] as Map)['name']?.toString()
+                                          : null) ?? 'Club'),
+                                ),
+                              ),
+                        ],
+                      ],
+                    ),
     );
   }
 }
