@@ -66,6 +66,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _nameController.text =
           profile?['display_name']?.toString() ??
           user.userMetadata?['display_name']?.toString() ??
+          user.userMetadata?['full_name']?.toString() ??
+          user.userMetadata?['name']?.toString() ??
           user.email?.split('@').first ??
           '';
 

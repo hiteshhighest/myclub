@@ -45,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
           .from('club_members')
           .select(
             'club_id, role, joined_at, '
-            'clubs(id, name, description)',
+            'clubs(id, name, description, logo_url)',
           )
           .eq('user_id', user.id)
           .order('joined_at', ascending: false);
@@ -558,10 +558,23 @@ class _HomeScreenState extends State<HomeScreen> {
             contentPadding: const EdgeInsets.all(12),
             leading: CircleAvatar(
               radius: 26,
-              child: Text(
-                clubName.isNotEmpty ? clubName[0].toUpperCase() : 'C',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              backgroundImage:
+                  club is Map &&
+                      (club['logo_url']?.toString().isNotEmpty ?? false)
+                  ? NetworkImage(club['logo_url'].toString())
+                  : null,
+              child:
+                  club is Map &&
+                      (club['logo_url']?.toString().isNotEmpty ?? false)
+                  ? null
+                  : Text(
+                      clubName.isNotEmpty ? clubName[0].toUpperCase() : 'C',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ),
             ),
             title: Text(
               clubName,
@@ -597,7 +610,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final user = _supabase.auth.currentUser;
     final email = user?.email ?? 'Member';
-    final metadataName = user?.userMetadata?['display_name'] as String?;
+    final metadataName =
+        user?.userMetadata?['display_name']?.toString() ??
+        user?.userMetadata?['full_name']?.toString() ??
+        user?.userMetadata?['name']?.toString();
     final displayName = metadataName != null && metadataName.trim().isNotEmpty
         ? metadataName.trim()
         : email.split('@').first;
@@ -606,7 +622,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text(
           'MyClub',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5),
         ),
         actions: [
           IconButton(
@@ -637,20 +653,89 @@ class _HomeScreenState extends State<HomeScreen> {
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(20),
                   children: [
-                    Text(
-                      'Welcome back,',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      displayName,
-                      style: Theme.of(context).textTheme.headlineMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your clubs, events and community — all in one place.',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                    Container(
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: const Color(0xFF236B63),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'MYCLUB',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.16),
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                                child: const Icon(
+                                  Icons.groups_outlined,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 15),
+                          Text(
+                            'Welcome back,',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.82),
+                              fontSize: 15,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.7,
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Find your people. Build something together.',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.82),
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              _HomeStat(
+                                value: '${_clubs.length}',
+                                label: 'Your clubs',
+                                icon: Icons.groups_rounded,
+                              ),
+                              const SizedBox(width: 10),
+                              _HomeStat(
+                                value:
+                                    '${_clubs.where((m) => m['role'] == 'owner').length}',
+                                label: 'You lead',
+                                icon: Icons.stars_rounded,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 20),
                     Row(
@@ -687,6 +772,63 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 24),
                   ],
                 ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeStat extends StatelessWidget {
+  final String value;
+  final String label;
+  final IconData icon;
+
+  const _HomeStat({
+    required this.value,
+    required this.label,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white, size: 19),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.78),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

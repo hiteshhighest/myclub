@@ -55,15 +55,15 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       if (clubIds.isNotEmpty) {
         final result = await _supabase
             .from('announcements')
-            .select('id, club_id, title, body, is_pinned, created_at, created_by, visibility')
+            .select(
+              'id, club_id, title, body, is_pinned, created_at, created_by, visibility',
+            )
             .inFilter('club_id', clubIds)
             .order('is_pinned', ascending: false)
             .order('created_at', ascending: false);
 
         announcements = List<Map<String, dynamic>>.from(
-          (result as List).map(
-            (row) => Map<String, dynamic>.from(row as Map),
-          ),
+          (result as List).map((row) => Map<String, dynamic>.from(row as Map)),
         );
 
         // Fetch author profiles separately so profile RLS policies are respected.
@@ -124,9 +124,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       if (membership['club_id'].toString() != clubId) continue;
 
       final club = membership['clubs'];
-      final name = club is Map
-          ? club['name']?.toString() ?? 'Club'
-          : 'Club';
+      final name = club is Map ? club['name']?.toString() ?? 'Club' : 'Club';
       final description = club is Map
           ? club['description']?.toString() ?? ''
           : '';
@@ -149,9 +147,7 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
   void _openProfile(String userId) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => ProfileViewScreen(userId: userId),
-      ),
+      MaterialPageRoute(builder: (_) => ProfileViewScreen(userId: userId)),
     );
   }
 
@@ -171,8 +167,8 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     final name = !isPublic
         ? 'Private profile'
         : rawName.isEmpty
-            ? 'Club member'
-            : rawName;
+        ? 'Club member'
+        : rawName;
     final authorProfile = profile;
     final String? avatarUrl;
     if (isPublic && authorProfile != null) {
@@ -245,123 +241,118 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
                 ],
               )
             : _error != null
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
-                    children: [
-                      const Icon(Icons.cloud_off_outlined, size: 48),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Could not load announcements.',
-                        textAlign: TextAlign.center,
-                      ),
-                      Text(_error!, textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      Center(
-                        child: FilledButton(
-                          onPressed: _loadAnnouncements,
-                          child: const Text('Try again'),
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                children: [
+                  const Icon(Icons.cloud_off_outlined, size: 48),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Could not load announcements.',
+                    textAlign: TextAlign.center,
+                  ),
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: FilledButton(
+                      onPressed: _loadAnnouncements,
+                      child: const Text('Try again'),
+                    ),
+                  ),
+                ],
+              )
+            : _announcements.isEmpty
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(24),
+                children: const [
+                  SizedBox(height: 90),
+                  Icon(Icons.campaign_outlined, size: 56),
+                  SizedBox(height: 16),
+                  Text(
+                    'No announcements yet',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 18),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Updates from your clubs will appear here.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              )
+            : ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.all(16),
+                itemCount: _announcements.length,
+                itemBuilder: (context, index) {
+                  final announcement = _announcements[index];
+                  final clubId = announcement['club_id'].toString();
+                  final pinned = announcement['is_pinned'] == true;
+
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: CircleAvatar(
+                        child: Icon(
+                          pinned
+                              ? Icons.push_pin_outlined
+                              : Icons.campaign_outlined,
                         ),
                       ),
-                    ],
-                  )
-                : _announcements.isEmpty
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(24),
-                        children: const [
-                          SizedBox(height: 90),
-                          Icon(Icons.campaign_outlined, size: 56),
-                          SizedBox(height: 16),
-                          Text(
-                            'No announcements yet',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 18),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Updates from your clubs will appear here.',
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      )
-                    : ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _announcements.length,
-                        itemBuilder: (context, index) {
-                          final announcement = _announcements[index];
-                          final clubId = announcement['club_id'].toString();
-                          final pinned = announcement['is_pinned'] == true;
-
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.all(16),
-                              leading: CircleAvatar(
-                                child: Icon(
-                                  pinned
-                                      ? Icons.push_pin_outlined
-                                      : Icons.campaign_outlined,
-                                ),
-                              ),
-                              title: Text(
-                                announcement['title']?.toString() ??
-                                    'Announcement',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(_clubName(clubId)),
-                                    if (announcement['visibility'] == 'executives')
-                                      const Padding(
-                                        padding: EdgeInsets.only(top: 6),
-                                        child: Align(
-                                          alignment: Alignment.centerLeft,
-                                          child: Chip(
-                                            avatar: Icon(
-                                              Icons.admin_panel_settings_outlined,
-                                              size: 16,
-                                            ),
-                                            label: Text('Executive Only'),
-                                            visualDensity: VisualDensity.compact,
-                                          ),
-                                        ),
-                                      ),
-                                    const SizedBox(height: 5),
-                                    _authorRow(announcement),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      announcement['body']?.toString() ?? '',
-                                      maxLines: 4,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(_formatDate(announcement['created_at'])),
-                                    if (pinned)
-                                      const Padding(
-                                        padding: EdgeInsets.only(top: 6),
-                                        child: Text(
-                                          'PINNED',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              trailing: const Icon(Icons.chevron_right),
-                              onTap: () => _openClub(clubId),
-                            ),
-                          );
-                        },
+                      title: Text(
+                        announcement['title']?.toString() ?? 'Announcement',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
+                      subtitle: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_clubName(clubId)),
+                            if (announcement['visibility'] == 'executives')
+                              const Padding(
+                                padding: EdgeInsets.only(top: 6),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Chip(
+                                    avatar: Icon(
+                                      Icons.admin_panel_settings_outlined,
+                                      size: 16,
+                                    ),
+                                    label: Text('Executive Only'),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                ),
+                              ),
+                            const SizedBox(height: 5),
+                            _authorRow(announcement),
+                            const SizedBox(height: 6),
+                            Text(
+                              announcement['body']?.toString() ?? '',
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(_formatDate(announcement['created_at'])),
+                            if (pinned)
+                              const Padding(
+                                padding: EdgeInsets.only(top: 6),
+                                child: Text(
+                                  'PINNED',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _openClub(clubId),
+                    ),
+                  );
+                },
+              ),
       ),
     );
   }
