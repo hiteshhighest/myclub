@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+
 import 'google_auth_button.dart';
 import 'signup_screen.dart';
 
@@ -83,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         height: 76,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(18),
-                          color: const Color(0xFF236B63),
+                          color: MyClubTheme.brand,
                         ),
                         child: const Icon(
                           Icons.hub_rounded,
@@ -199,7 +201,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      '   ',
+                      'Built for clubs, teams and communities.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.labelMedium
                           ?.copyWith(color: colors.onSurfaceVariant),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+
 import '../clubs/club_detail_screen.dart';
 
 enum _UpdateFilter { all, events, announcements }
@@ -215,7 +217,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                color: const Color(0xFF236B63),
+                color: MyClubTheme.brand,
               ),
               child: Row(
                 children: [
@@ -226,7 +228,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         const Text(
                           'Stay in the loop',
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: Color(0xEBFFFFFF),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -243,7 +245,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                         const SizedBox(height: 5),
                         Text(
                           '${_items.length} updates from your clubs',
-                          style: const TextStyle(color: Colors.white70),
+                          style: const TextStyle(color: Color(0xEBFFFFFF)),
                         ),
                       ],
                     ),

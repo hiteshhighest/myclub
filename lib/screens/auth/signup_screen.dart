@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+
 import 'google_auth_button.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -111,7 +113,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         height: 68,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(18),
-                          color: const Color(0xFF236B63),
+                          color: MyClubTheme.brand,
                         ),
                         child: const Icon(
                           Icons.hub_rounded,
@@ -218,7 +220,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      '   ',
+                      'By continuing, you agree to use MyClub respectfully.',
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.labelMedium
                           ?.copyWith(color: colors.onSurfaceVariant),

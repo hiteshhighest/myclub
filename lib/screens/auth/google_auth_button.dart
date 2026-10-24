@@ -54,7 +54,14 @@ class GoogleAuthButton extends StatelessWidget {
           else
             const _GoogleMark(),
           const SizedBox(width: 12),
-          Text(label),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+          ),
         ],
       ),
     );

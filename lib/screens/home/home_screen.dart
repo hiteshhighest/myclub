@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+
 import '../clubs/club_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -657,7 +659,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       padding: const EdgeInsets.all(22),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
-                        color: const Color(0xFF236B63),
+                        color: MyClubTheme.brand,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -668,7 +670,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: Text(
                                   'MYCLUB',
                                   style: TextStyle(
-                                    color: Colors.white70,
+                                    color: Color(0xEBFFFFFF),
                                     fontSize: 11,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 1.2,
@@ -693,7 +695,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             'Welcome back,',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.82),
+                              color: Color(0xEBFFFFFF),
                               fontSize: 15,
                             ),
                           ),
@@ -713,7 +715,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             'Find your people. Build something together.',
                             style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.82),
+                              color: Color(0xEBFFFFFF),
                               height: 1.4,
                             ),
                           ),
@@ -820,7 +822,7 @@ class _HomeStat extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.78),
+                      color: Color(0xEBFFFFFF),
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
