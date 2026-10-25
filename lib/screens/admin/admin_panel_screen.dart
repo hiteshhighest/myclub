@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -15,8 +14,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   bool _checkingAccess = true;
   bool _isAdmin = false;
   bool _loading = false;
-  bool get _canBroadcastFromThisDevice =>
-      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   String? _error;
   List<Map<String, dynamic>> _clubs = [];
   List<Map<String, dynamic>> _requests = [];
@@ -422,15 +419,6 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ),
     );
     if (send != true) {
-      title.dispose();
-      body.dispose();
-      link.dispose();
-      return;
-    }
-    if (!_canBroadcastFromThisDevice) {
-      _toast(
-        'Admin broadcasts can only be sent from the native MyClub Android app.',
-      );
       title.dispose();
       body.dispose();
       link.dispose();
@@ -873,9 +861,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           child: SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _loading || !_canBroadcastFromThisDevice
-                  ? null
-                  : _broadcastMessage,
+              onPressed: _loading ? null : _broadcastMessage,
               icon: const Icon(Icons.campaign_outlined),
               label: const Text('Send admin message'),
             ),
@@ -886,9 +872,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              _canBroadcastFromThisDevice
-                  ? 'Choose all users, a platform, club owners, or club executives for each broadcast.'
-                  : 'Admin broadcasts can be sent from the native MyClub Android app.',
+              'Send admin announcements from Android, iOS, or web. Choose all users, a platform, club owners, or club executives as recipients.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
