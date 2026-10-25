@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'club_detail_screen.dart';
+import '../positions/open_positions_screen.dart';
 
 class PublicClubsScreen extends StatefulWidget {
   const PublicClubsScreen({super.key});
@@ -55,6 +56,28 @@ class _PublicClubsScreenState extends State<PublicClubsScreen> {
       final clubs = List<Map<String, dynamic>>.from(
         (response as List).map((row) => Map<String, dynamic>.from(row as Map)),
       );
+      final clubIds = clubs
+          .map((club) => club['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (clubIds.isNotEmpty) {
+        try {
+          final verificationRows = await _db
+              .from('clubs')
+              .select('id, is_verified')
+              .inFilter('id', clubIds);
+          final verifiedById = <String, bool>{
+            for (final row in verificationRows)
+              row['id'].toString(): row['is_verified'] == true,
+          };
+          for (final club in clubs) {
+            club['is_verified'] =
+                verifiedById[club['id']?.toString() ?? ''] ?? false;
+          }
+        } catch (_) {
+          // Keep Discover usable if the verification column migration is not applied yet.
+        }
+      }
       if (!mounted) return;
       setState(() {
         _clubs = clubs;
@@ -121,6 +144,13 @@ class _PublicClubsScreenState extends State<PublicClubsScreen> {
       appBar: AppBar(
         title: const Text('Discover clubs'),
         actions: [
+          IconButton(
+            tooltip: 'Explore open positions',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const OpenPositionsScreen()),
+            ),
+            icon: const Icon(Icons.work_outline),
+          ),
           IconButton(
             tooltip: 'Refresh clubs',
             onPressed: _loading ? null : _loadClubs,
@@ -234,12 +264,30 @@ class _PublicClubsScreenState extends State<PublicClubsScreen> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        name,
-                                        style: theme.textTheme.titleMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w700,
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              name,
+                                              style: theme.textTheme.titleMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
                                             ),
+                                          ),
+                                          if (club['is_verified'] == true)
+                                            const Padding(
+                                              padding: EdgeInsets.only(left: 5),
+                                              child: Tooltip(
+                                                message: 'Verified club',
+                                                child: Icon(
+                                                  Icons.verified,
+                                                  size: 19,
+                                                  color: Colors.teal,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                       const SizedBox(height: 4),
                                       if (description.isNotEmpty)

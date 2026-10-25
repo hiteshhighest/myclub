@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart' as picker;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../admin/admin_panel_screen.dart';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -21,6 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _saving = false;
   bool _showClubs = true;
   bool _isPublic = true;
+  bool _isAdmin = false;
   String? _avatarUrl;
   String? _error;
   List<Map<String, dynamic>> _clubs = [];
@@ -54,6 +57,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) throw Exception('Please log in again.');
+      try {
+        _isAdmin = await _supabase.rpc('is_myclub_admin') == true;
+      } catch (_) {
+        _isAdmin = false;
+      }
 
       final profile = await _supabase
           .from('profiles')
@@ -329,6 +337,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             );
           }),
+        if (_isAdmin) ...[
+          const SizedBox(height: 20),
+          Card(
+            child: ListTile(
+              leading: const CircleAvatar(
+                child: Icon(Icons.admin_panel_settings_outlined),
+              ),
+              title: const Text('MyClub Control Room'),
+              subtitle: const Text(
+                'Review verification requests, monitor clubs, and message members.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminPanelScreen()),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
         OutlinedButton.icon(
           onPressed: _saving

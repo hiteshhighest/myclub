@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme.dart';
 
@@ -21,6 +22,8 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
   bool _loading = true;
   String? _error;
   _UpdateFilter _filter = _UpdateFilter.all;
+  final Set<String> _joinedEventIds = <String>{};
+  final Set<String> _attendanceBusy = <String>{};
 
   @override
   void initState() {
@@ -64,13 +67,20 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       };
 
       final items = <Map<String, dynamic>>[];
+      final joinedRows = await _db
+          .from('event_attendees')
+          .select('event_id')
+          .eq('user_id', user.id);
+      final joinedIds = (joinedRows as List)
+          .map((row) => (row as Map)['event_id'].toString())
+          .toSet();
       if (ids.isNotEmpty) {
         final now = DateTime.now().toUtc().toIso8601String();
         final results = await Future.wait([
           _db
               .from('club_events')
               .select(
-                'id, club_id, title, description, starts_at, location, visibility',
+                'id, club_id, title, description, starts_at, location, visibility, external_url, is_public',
               )
               .inFilter('club_id', ids)
               .gte('starts_at', now)
@@ -79,7 +89,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           _db
               .from('announcements')
               .select(
-                'id, club_id, title, body, is_pinned, created_at, visibility, created_by',
+                'id, club_id, title, body, is_pinned, created_at, visibility, created_by, external_url',
               )
               .inFilter('club_id', ids)
               .order('is_pinned', ascending: false)
@@ -115,6 +125,22 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
         }
       }
 
+      // Public events from verified clubs are included even when the viewer is not a member.
+      final publicEvents = await _db.rpc('get_public_verified_club_events');
+      final seenEventIds = items
+          .where((i) => i['_kind'] == 'event')
+          .map((i) => i['id'].toString())
+          .toSet();
+      for (final row in publicEvents as List) {
+        final item = Map<String, dynamic>.from(row as Map);
+        if (seenEventIds.contains(item['id'].toString())) continue;
+        item['_kind'] = 'event';
+        item['_when'] = DateTime.tryParse(item['starts_at']?.toString() ?? '');
+        item['_club_name'] = item['club_name']?.toString() ?? 'Verified club';
+        item['_global_public'] = true;
+        items.add(item);
+      }
+
       items.sort((a, b) {
         final aDate = a['_when'] as DateTime?;
         final bDate = b['_when'] as DateTime?;
@@ -127,6 +153,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       setState(() {
         _memberships = memberships;
         _items = items;
+        _joinedEventIds
+          ..clear()
+          ..addAll(joinedIds);
         _loading = false;
       });
     } catch (error) {
@@ -143,6 +172,186 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
     _UpdateFilter.events => item['_kind'] == 'event',
     _UpdateFilter.announcements => item['_kind'] == 'announcement',
   };
+
+  Future<void> _showEventDetails(Map<String, dynamic> item) async {
+    final eventId = item['id'].toString();
+    final matchingMemberships = _memberships
+        .where((m) => m['club_id'].toString() == item['club_id'].toString())
+        .toList();
+    final memberRecord = matchingMemberships.isEmpty
+        ? null
+        : matchingMemberships.first;
+    final memberRole = memberRecord?['role']?.toString() ?? 'member';
+    final canJoin =
+        item['_kind'] == 'event' &&
+        (item['visibility'] == 'public' ||
+            (item['visibility'] == 'all_members' && memberRecord != null) ||
+            (item['visibility'] == 'executives' &&
+                ['owner', 'executive'].contains(memberRole)));
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final joined = _joinedEventIds.contains(eventId);
+          final busy = _attendanceBusy.contains(eventId);
+          return AlertDialog(
+            title: Text(item['title']?.toString() ?? 'Event'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['_club_name']?.toString() ?? 'Club',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _dateLabel(
+                      item['starts_at'] ?? item['created_at'],
+                      includeTime: true,
+                    ),
+                  ),
+                  if ((item['location'] ?? '')
+                      .toString()
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text('Location: ${item['location']}'),
+                  ],
+                  if ((item['description'] ?? item['body'] ?? '')
+                      .toString()
+                      .trim()
+                      .isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text((item['description'] ?? item['body']).toString()),
+                  ],
+                  if (item['_kind'] == 'event') ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest
+                            .withValues(alpha: 0.45),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            item['visibility'] == 'public'
+                                ? Icons.public_rounded
+                                : item['visibility'] == 'executives'
+                                ? Icons.admin_panel_settings_outlined
+                                : Icons.groups_2_outlined,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 9),
+                          Expanded(
+                            child: Text(
+                              item['visibility'] == 'public'
+                                  ? 'Public event — anyone with a MyClub account can join without becoming a club member.'
+                                  : item['visibility'] == 'executives'
+                                  ? 'This event is for club executives only.'
+                                  : 'This event is for club members.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              if (canJoin)
+                TextButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () async {
+                          _attendanceBusy.add(eventId);
+                          setDialogState(() {});
+                          try {
+                            if (joined) {
+                              await _db
+                                  .from('event_attendees')
+                                  .delete()
+                                  .eq('event_id', eventId)
+                                  .eq('user_id', _db.auth.currentUser!.id);
+                              _joinedEventIds.remove(eventId);
+                            } else {
+                              await _db.from('event_attendees').insert({
+                                'event_id': eventId,
+                                'user_id': _db.auth.currentUser!.id,
+                              });
+                              _joinedEventIds.add(eventId);
+                            }
+                            if (!mounted) return;
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  joined
+                                      ? 'You left this event.'
+                                      : 'You’re on the attendee list!',
+                                ),
+                              ),
+                            );
+                            setState(() {});
+                          } catch (error) {
+                            if (mounted)
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Could not update attendance: $error',
+                                  ),
+                                ),
+                              );
+                          } finally {
+                            _attendanceBusy.remove(eventId);
+                            if (ctx.mounted) setDialogState(() {});
+                          }
+                        },
+                  icon: Icon(
+                    joined
+                        ? Icons.event_busy_outlined
+                        : Icons.event_available_outlined,
+                  ),
+                  label: Text(
+                    busy
+                        ? 'Please wait…'
+                        : joined
+                        ? 'Leave event'
+                        : 'Join event',
+                  ),
+                ),
+              if ((item['external_url'] ?? '').toString().trim().isNotEmpty)
+                TextButton.icon(
+                  onPressed: () async {
+                    final uri = Uri.tryParse(item['external_url'].toString());
+                    if (uri != null &&
+                        (uri.scheme == 'https' || uri.scheme == 'http'))
+                      await launchUrl(
+                        uri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                  },
+                  icon: const Icon(Icons.open_in_new),
+                  label: const Text('Event link'),
+                ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 
   void _openClub(String clubId) {
     for (final membership in _memberships) {
@@ -331,7 +540,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                   child: Card(
                     clipBehavior: Clip.antiAlias,
                     child: InkWell(
-                      onTap: () => _openClub(clubId),
+                      onTap: () {
+                        if (isEvent || item['_global_public'] == true) {
+                          _showEventDetails(item);
+                        } else {
+                          _openClub(clubId);
+                        }
+                      },
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -381,7 +596,14 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                       const SizedBox(height: 3),
                                       Text(
                                         isEvent
-                                            ? 'EVENT'
+                                            ? ((item['visibility'] ==
+                                                          'public' ||
+                                                      item['is_public'] == true)
+                                                  ? 'PUBLIC EVENT'
+                                                  : item['visibility'] ==
+                                                        'executives'
+                                                  ? 'EXECUTIVES ONLY'
+                                                  : 'CLUB MEMBERS')
                                             : pinned
                                             ? 'PINNED ANNOUNCEMENT'
                                             : 'ANNOUNCEMENT',
@@ -396,7 +618,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                     ],
                                   ),
                                 ),
-                                if (item['visibility'] == 'executives')
+                                if (isEvent && item['visibility'] == 'public')
+                                  Icon(
+                                    Icons.public_rounded,
+                                    size: 19,
+                                    color: colors.primary,
+                                  )
+                                else if (item['visibility'] == 'executives')
                                   const Icon(
                                     Icons.admin_panel_settings_outlined,
                                     size: 18,
@@ -447,6 +675,32 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                     ),
                                   ),
                                 ],
+                              ),
+                            ],
+                            if ((item['external_url'] ?? '')
+                                .toString()
+                                .trim()
+                                .isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: OutlinedButton.icon(
+                                  onPressed: () async {
+                                    final uri = Uri.tryParse(
+                                      item['external_url'].toString(),
+                                    );
+                                    if (uri != null &&
+                                        (uri.scheme == 'https' ||
+                                            uri.scheme == 'http')) {
+                                      await launchUrl(
+                                        uri,
+                                        mode: LaunchMode.externalApplication,
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.open_in_new, size: 17),
+                                  label: const Text('Open related link'),
+                                ),
                               ),
                             ],
                             const SizedBox(height: 14),

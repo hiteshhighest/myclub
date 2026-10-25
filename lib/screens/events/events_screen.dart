@@ -55,7 +55,9 @@ class _EventsScreenState extends State<EventsScreen> {
       if (clubIds.isNotEmpty) {
         final result = await _supabase
             .from('club_events')
-            .select('id, club_id, title, description, starts_at, location')
+            .select(
+              'id, club_id, title, description, starts_at, location, visibility, is_public, external_url',
+            )
             .inFilter('club_id', clubIds)
             .gte('starts_at', DateTime.now().toUtc().toIso8601String())
             .order('starts_at');
@@ -214,6 +216,38 @@ class _EventsScreenState extends State<EventsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(_clubName(clubId)),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                if (event['visibility'] == 'public' ||
+                                    event['is_public'] == true)
+                                  const Chip(
+                                    avatar: Icon(
+                                      Icons.public_rounded,
+                                      size: 15,
+                                    ),
+                                    label: Text('Public'),
+                                  )
+                                else if (event['visibility'] == 'executives')
+                                  const Chip(
+                                    avatar: Icon(
+                                      Icons.admin_panel_settings_outlined,
+                                      size: 15,
+                                    ),
+                                    label: Text('Executives'),
+                                  )
+                                else
+                                  const Chip(
+                                    avatar: Icon(
+                                      Icons.groups_2_outlined,
+                                      size: 15,
+                                    ),
+                                    label: Text('Club members'),
+                                  ),
+                              ],
+                            ),
                             const SizedBox(height: 4),
                             Text(_formatDate(event['starts_at'])),
                             if ((event['location'] ?? '').toString().isNotEmpty)

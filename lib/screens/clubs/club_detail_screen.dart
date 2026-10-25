@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart' as picker;
 
 import 'affiliated_clubs_tab.dart';
+import '../positions/open_positions_screen.dart';
 
 class ClubDetailScreen extends StatefulWidget {
   final String clubId;
@@ -34,6 +35,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
   bool _savingClubDetails = false;
   bool _savingClubVisibility = false;
   bool _isPublicClub = false;
+  bool _isVerifiedClub = false;
+  bool _verificationRequested = false;
 
   late String _clubName;
   late String _clubDescription;
@@ -65,7 +68,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
     try {
       final club = await _db
           .from('clubs')
-          .select('name, description, logo_url, is_public')
+          .select(
+            'name, description, logo_url, is_public, is_verified, verification_requested_at',
+          )
           .eq('id', widget.clubId)
           .maybeSingle();
       if (!mounted || club == null) return;
@@ -74,7 +79,23 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
         _clubDescription = club['description']?.toString() ?? _clubDescription;
         _clubLogoUrl = club['logo_url']?.toString();
         _isPublicClub = club['is_public'] == true;
+        _isVerifiedClub = club['is_verified'] == true;
+        _verificationRequested = club['verification_requested_at'] != null;
       });
+      try {
+        final request = await _db
+            .from('club_verification_requests')
+            .select('status')
+            .eq('club_id', widget.clubId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (mounted && !_isVerifiedClub) {
+          setState(
+            () => _verificationRequested = request?['status'] == 'pending',
+          );
+        }
+      } catch (_) {}
     } catch (_) {
       // Keep the values supplied by the parent if the optional logo column
       // has not been added to the database yet.
@@ -83,6 +104,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
 
   Future<void> _setClubVisibility(bool isPublic) async {
     if (!_isOwner || _savingClubVisibility || isPublic == _isPublicClub) return;
+    if (isPublic && !_isVerifiedClub) {
+      _message(
+        'Only verified clubs can be made public. Request verification first.',
+      );
+      return;
+    }
     setState(() => _savingClubVisibility = true);
     try {
       await _db.rpc(
@@ -100,6 +127,109 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
       _message('Could not update club visibility: $error');
     } finally {
       if (mounted) setState(() => _savingClubVisibility = false);
+    }
+  }
+
+  Future<void> _requestVerification() async {
+    if (!_isOwner || _isVerifiedClub || _verificationRequested) return;
+    final formKey = GlobalKey<FormState>();
+    final social = TextEditingController();
+    final proof = TextEditingController();
+    try {
+      final submitted = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Request club verification'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Help us confirm that this club is authentic. Only the club owner can submit this request.',
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: social,
+                      maxLength: 180,
+                      decoration: const InputDecoration(
+                        labelText: 'Club social media ID',
+                        hintText: '@yourclub or profile URL',
+                        prefixIcon: Icon(Icons.alternate_email),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) =>
+                          (value == null || value.trim().length < 2)
+                          ? 'Enter the club social media ID.'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: proof,
+                      minLines: 4,
+                      maxLines: 6,
+                      maxLength: 3000,
+                      decoration: const InputDecoration(
+                        labelText: 'Proof of ownership',
+                        hintText: 'Share a public page/link or explain evidence that connects you to this club. Include a URL where possible.',
+                        alignLabelWithHint: true,
+                        prefixIcon: Icon(Icons.verified_user_outlined),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) =>
+                          (value == null || value.trim().length < 10)
+                          ? 'Provide enough detail to verify ownership.'
+                          : null,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Your proof is private and visible only to you and the MyClub administrator.',
+                      style: Theme.of(dialogContext).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                if (formKey.currentState!.validate())
+                  Navigator.pop(dialogContext, true);
+              },
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('Submit request'),
+            ),
+          ],
+        ),
+      );
+      if (submitted != true) return;
+      await _db.rpc(
+        'request_club_verification',
+        params: {
+          'p_club_id': widget.clubId,
+          'p_social_media_id': social.text.trim(),
+          'p_owner_proof': proof.text.trim(),
+        },
+      );
+      if (!mounted) return;
+      setState(() => _verificationRequested = true);
+      _message(
+        'Verification request submitted. You can continue using your club while it is reviewed.',
+      );
+    } catch (error) {
+      _message('Could not request verification: $error');
+    } finally {
+      social.dispose();
+      proof.dispose();
     }
   }
 
@@ -730,7 +860,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
           children: [
             _buildOverview(theme),
             _AnnouncementsTab(clubId: widget.clubId, canManage: _isLeader),
-            _EventsTab(clubId: widget.clubId, canManage: _isLeader),
+            _EventsTab(
+              clubId: widget.clubId,
+              canManage: _isLeader,
+              isVerifiedClub: _isVerifiedClub,
+            ),
             _MembersTab(clubId: widget.clubId, currentUserRole: widget.role),
             _ClubChatTab(clubId: widget.clubId),
             AffiliatedClubsTab(clubId: widget.clubId, role: widget.role),
@@ -799,12 +933,17 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
           Card(
             child: SwitchListTile.adaptive(
               value: _isPublicClub,
-              onChanged: _savingClubVisibility ? null : _setClubVisibility,
+              onChanged:
+                  _savingClubVisibility || (!_isVerifiedClub && !_isPublicClub)
+                  ? null
+                  : _setClubVisibility,
               title: const Text('Public club'),
               subtitle: Text(
                 _isPublicClub
-                    ? 'Discoverable in Public Clubs. Anyone signed in can join without an invite code.'
-                    : 'Private club. People need an invite code to join.',
+                    ? 'Discoverable in Discover. Anyone signed in can join without an invite code.'
+                    : _isVerifiedClub
+                    ? 'Private listing. Your verified club can switch public whenever you choose.'
+                    : 'Verification is required before this club can be made public.',
               ),
               secondary: _savingClubVisibility
                   ? const SizedBox(
@@ -815,6 +954,58 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                   : Icon(_isPublicClub ? Icons.public : Icons.lock_outline),
             ),
           ),
+          const SizedBox(height: 10),
+          Card(
+            child: ListTile(
+              leading: Icon(
+                _isVerifiedClub ? Icons.verified : Icons.verified_outlined,
+                color: _isVerifiedClub ? Colors.teal : null,
+              ),
+              title: Text(
+                _isVerifiedClub ? 'Verified club' : 'Club verification',
+              ),
+              subtitle: Text(
+                _isVerifiedClub
+                    ? 'Your club is verified. Its events are published publicly.'
+                    : _verificationRequested
+                    ? 'Verification request submitted and awaiting review.'
+                    : 'Submit your social media ID and proof of ownership to unlock public visibility and open positions.',
+              ),
+              trailing: _isVerifiedClub
+                  ? const Icon(Icons.check_circle, color: Colors.teal)
+                  : _verificationRequested
+                  ? const Icon(Icons.hourglass_top)
+                  : TextButton(
+                      onPressed: _requestVerification,
+                      child: const Text('Request'),
+                    ),
+            ),
+          ),
+          if (_isVerifiedClub) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => OpenPositionsScreen(
+                    clubId: widget.clubId,
+                    clubName: _clubName,
+                    canManage: _isLeader,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.work_outline),
+              label: Text(
+                _isLeader ? 'Manage open positions' : 'View open positions',
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _isPublicClub
+                  ? 'Open positions are discoverable by all MyClub users.'
+                  : 'Your club page stays private, but verified-club open positions can still be discovered by all MyClub users.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ],
         const SizedBox(height: 24),
         Card(
@@ -1169,6 +1360,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
   Future<void> _create() async {
     final titleController = TextEditingController();
     final bodyController = TextEditingController();
+    final externalUrlController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     final selectedFiles = <picker.PlatformFile>[];
     bool pinned = false;
@@ -1215,6 +1407,28 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                             value == null || value.trim().isEmpty
                             ? 'Enter the announcement'
                             : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: externalUrlController,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'External link (optional)',
+                          hintText: 'https://…',
+                          prefixIcon: Icon(Icons.link),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) return null;
+                          final uri = Uri.tryParse(text);
+                          return uri != null &&
+                                  (uri.scheme == 'https' ||
+                                      uri.scheme == 'http') &&
+                                  uri.host.isNotEmpty
+                              ? null
+                              : 'Enter a valid http or https URL';
+                        },
                       ),
                       DropdownButtonFormField<String>(
                         value: visibility,
@@ -1342,6 +1556,9 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
               'is_pinned': pinned,
               'visibility': visibility,
               'created_by': user.id,
+              'external_url': externalUrlController.text.trim().isEmpty
+                  ? null
+                  : externalUrlController.text.trim(),
             })
             .select('id')
             .single();
@@ -1411,30 +1628,134 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     } finally {
       titleController.dispose();
       bodyController.dispose();
+      externalUrlController.dispose();
 
       if (mounted) setState(() => _working = false);
     }
   }
 
+  Future<void> _openExternalLink(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+      _message('This link is invalid.');
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened) _message('Could not open this link.');
+  }
+
+  Widget _attachmentTile(Map<String, dynamic> attachment) {
+    final isImage =
+        attachment['mime_type']?.toString().startsWith('image/') == true;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(
+            isImage
+                ? Icons.image_outlined
+                : attachment['mime_type'] == 'application/pdf'
+                ? Icons.picture_as_pdf_outlined
+                : Icons.attach_file_outlined,
+          ),
+          title: Text(
+            attachment['file_name']?.toString() ?? 'Attachment',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(
+            '${_fileSize(attachment['size_bytes'])}${isImage ? ' · Tap to preview' : ''}',
+          ),
+          trailing: Icon(
+            isImage ? Icons.visibility_outlined : Icons.open_in_new,
+          ),
+          onTap: () => _openAttachment(attachment),
+        ),
+        if (isImage)
+          FutureBuilder<String>(
+            future: _signedAttachmentUrl(attachment['storage_path'].toString()),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: GestureDetector(
+                  onTap: () => _showImagePreview(
+                    snapshot.data!,
+                    attachment['file_name']?.toString() ?? 'Image',
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      snapshot.data!,
+                      height: 190,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Future<String> _signedAttachmentUrl(String path) =>
+      _db.storage.from(_bucket).createSignedUrl(path, 300);
+
+  Future<void> _showImagePreview(String url, String title) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog.fullscreen(
+        child: Scaffold(
+          appBar: AppBar(
+            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(dialogContext),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.7,
+              maxScale: 5,
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'Could not load this image. Please check your connection.',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _openAttachment(Map<String, dynamic> attachment) async {
     try {
       final path = attachment['storage_path'].toString();
-
-      // The bucket stays private. This link expires after 60 seconds.
-      final signedUrl = await _db.storage
-          .from(_bucket)
-          .createSignedUrl(path, 60);
-
+      final signedUrl = await _signedAttachmentUrl(path);
       if (!mounted) return;
-
+      if (attachment['mime_type']?.toString().startsWith('image/') == true) {
+        await _showImagePreview(
+          signedUrl,
+          attachment['file_name']?.toString() ?? 'Image',
+        );
+        return;
+      }
       final opened = await launchUrl(
         Uri.parse(signedUrl),
         mode: LaunchMode.platformDefault,
       );
-
-      if (!opened) {
-        _message('Could not open this attachment.');
-      }
+      if (!opened) _message('Could not open this attachment.');
     } catch (error) {
       _message('Could not open attachment: $error');
     }
@@ -1628,6 +1949,25 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                               ),
                               const SizedBox(height: 10),
                               Text(item['body']?.toString() ?? ''),
+                              if ((item['external_url'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _openExternalLink(
+                                      item['external_url'].toString(),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.open_in_new,
+                                      size: 17,
+                                    ),
+                                    label: const Text('Open related link'),
+                                  ),
+                                ),
+                              ],
                               if (files.isNotEmpty) ...[
                                 const SizedBox(height: 16),
                                 const Divider(),
@@ -1635,32 +1975,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
                                   'Attachments',
                                   style: TextStyle(fontWeight: FontWeight.w600),
                                 ),
-                                for (final file in files)
-                                  ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: Icon(
-                                      file['mime_type']?.toString().startsWith(
-                                                'image/',
-                                              ) ==
-                                              true
-                                          ? Icons.image_outlined
-                                          : file['mime_type'] ==
-                                                'application/pdf'
-                                          ? Icons.picture_as_pdf_outlined
-                                          : Icons.attach_file_outlined,
-                                    ),
-                                    title: Text(
-                                      file['file_name']?.toString() ??
-                                          'Attachment',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      _fileSize(file['size_bytes']),
-                                    ),
-                                    trailing: const Icon(Icons.open_in_new),
-                                    onTap: () => _openAttachment(file),
-                                  ),
+                                for (final file in files) _attachmentTile(file),
                               ],
                               const SizedBox(height: 12),
                               Text(
@@ -1687,8 +2002,13 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
 class _EventsTab extends StatefulWidget {
   final String clubId;
   final bool canManage;
+  final bool isVerifiedClub;
 
-  const _EventsTab({required this.clubId, required this.canManage});
+  const _EventsTab({
+    required this.clubId,
+    required this.canManage,
+    required this.isVerifiedClub,
+  });
 
   @override
   State<_EventsTab> createState() => _EventsTabState();
@@ -1744,6 +2064,7 @@ class _EventsTabState extends State<_EventsTab> {
     final title = TextEditingController();
     final description = TextEditingController();
     final location = TextEditingController();
+    final externalUrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
@@ -1756,107 +2077,187 @@ class _EventsTabState extends State<_EventsTab> {
         builder: (dialogContext) => StatefulBuilder(
           builder: (dialogContext, setDialogState) => AlertDialog(
             title: const Text('Create event'),
-            content: SingleChildScrollView(
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: title,
-                      maxLength: 150,
-                      decoration: const InputDecoration(
-                        labelText: 'Event name',
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                          ? 'Enter an event name'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: description,
-                      maxLength: 5000,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: location,
-                      maxLength: 300,
-                      decoration: const InputDecoration(
-                        labelText: 'Venue or meeting link',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<String>(
-                      value: visibility,
-                      decoration: const InputDecoration(
-                        labelText: 'Audience',
-                        border: OutlineInputBorder(),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'all_members',
-                          child: Text('All Club Members'),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: title,
+                        maxLength: 150,
+                        decoration: const InputDecoration(
+                          labelText: 'Event name',
+                          border: OutlineInputBorder(),
                         ),
-                        DropdownMenuItem(
-                          value: 'executives',
-                          child: Text('Executive Only'),
-                        ),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setDialogState(() => visibility = value);
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.calendar_month),
-                      title: const Text('Date'),
-                      subtitle: Text(
-                        '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                            ? 'Enter an event name'
+                            : null,
                       ),
-                      onTap: () async {
-                        final picked = await showDatePicker(
-                          context: dialogContext,
-                          initialDate: selectedDate,
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime.now().add(
-                            const Duration(days: 3650),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: description,
+                        maxLength: 5000,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(
+                          labelText: 'Description',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: location,
+                        maxLength: 300,
+                        decoration: const InputDecoration(
+                          labelText: 'Venue or meeting link',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: externalUrl,
+                        keyboardType: TextInputType.url,
+                        decoration: const InputDecoration(
+                          labelText: 'External link (optional)',
+                          hintText: 'https://…',
+                          prefixIcon: Icon(Icons.link),
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          final text = value?.trim() ?? '';
+                          if (text.isEmpty) return null;
+                          final uri = Uri.tryParse(text);
+                          return uri != null &&
+                                  (uri.scheme == 'https' ||
+                                      uri.scheme == 'http') &&
+                                  uri.host.isNotEmpty
+                              ? null
+                              : 'Enter a valid http or https URL';
+                        },
+                      ),
+                      DropdownButtonFormField<String>(
+                        value: visibility,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Who is this event for?',
+                          helperText: 'Choose who can discover this event.',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [
+                          const DropdownMenuItem(
+                            value: 'executives',
+                            child: Text('Executives only'),
                           ),
-                        );
+                          const DropdownMenuItem(
+                            value: 'all_members',
+                            child: Text('Club members'),
+                          ),
+                          if (widget.isVerifiedClub)
+                            const DropdownMenuItem(
+                              value: 'public',
+                              child: Text('Everyone · anyone can join'),
+                            ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() => visibility = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(dialogContext)
+                              .colorScheme
+                              .surfaceContainerHighest
+                              .withValues(alpha: 0.45),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              visibility == 'public'
+                                  ? Icons.public_rounded
+                                  : visibility == 'executives'
+                                  ? Icons.admin_panel_settings_outlined
+                                  : Icons.groups_2_outlined,
+                              size: 20,
+                              color: Theme.of(dialogContext)
+                                  .colorScheme
+                                  .primary,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                visibility == 'public'
+                                    ? 'Visible to all MyClub users. Anyone can join this event without joining your club.'
+                                    : visibility == 'executives'
+                                    ? 'Only the club owner and executives can see this event.'
+                                    : 'Visible to people who are members of this club.',
+                                style: Theme.of(dialogContext)
+                                    .textTheme
+                                    .bodySmall,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.calendar_month),
+                        trailing: const Icon(
+                          Icons.edit_calendar_outlined,
+                          size: 20,
+                        ),
+                        title: const Text('Date'),
+                        subtitle: Text(
+                          '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                        ),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: dialogContext,
+                            initialDate: selectedDate,
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(
+                              const Duration(days: 3650),
+                            ),
+                          );
 
-                        if (picked != null && dialogContext.mounted) {
-                          setDialogState(() => selectedDate = picked);
-                        }
-                      },
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.schedule),
-                      title: const Text('Start time'),
-                      subtitle: Text(selectedTime.format(dialogContext)),
-                      onTap: () async {
-                        final picked = await showTimePicker(
-                          context: dialogContext,
-                          initialTime: selectedTime,
-                        );
+                          if (picked != null && dialogContext.mounted) {
+                            setDialogState(() => selectedDate = picked);
+                          }
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.schedule),
+                        trailing: const Icon(
+                          Icons.access_time_rounded,
+                          size: 20,
+                        ),
+                        title: const Text('Start time'),
+                        subtitle: Text(selectedTime.format(dialogContext)),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: dialogContext,
+                            initialTime: selectedTime,
+                          );
 
-                        if (picked != null && dialogContext.mounted) {
-                          setDialogState(() => selectedTime = picked);
-                        }
-                      },
-                    ),
-                  ],
+                          if (picked != null && dialogContext.mounted) {
+                            setDialogState(() => selectedTime = picked);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1905,7 +2306,11 @@ class _EventsTabState extends State<_EventsTab> {
         'location': location.text.trim(),
         'starts_at': start.toUtc().toIso8601String(),
         'visibility': visibility,
+        'is_public': visibility == 'public',
         'created_by': user.id,
+        'external_url': externalUrl.text.trim().isEmpty
+            ? null
+            : externalUrl.text.trim(),
       });
 
       if (!mounted) return;
@@ -1918,6 +2323,7 @@ class _EventsTabState extends State<_EventsTab> {
       title.dispose();
       description.dispose();
       location.dispose();
+      externalUrl.dispose();
 
       if (mounted) setState(() => _working = false);
     }
@@ -2041,6 +2447,39 @@ class _EventsTabState extends State<_EventsTab> {
                                     ),
                                 ],
                               ),
+                              if (event['visibility'] == 'public' ||
+                                  event['is_public'] == true)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Chip(
+                                      avatar: const Icon(
+                                        Icons.public,
+                                        size: 16,
+                                      ),
+                                      label: const Text(
+                                        'Public · anyone can join',
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                ),
+                              if (event['visibility'] == 'all_members')
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 8),
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Chip(
+                                      avatar: Icon(
+                                        Icons.groups_2_outlined,
+                                        size: 16,
+                                      ),
+                                      label: Text('Club members'),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                ),
                               if (event['visibility'] == 'executives')
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
@@ -2091,6 +2530,35 @@ class _EventsTabState extends State<_EventsTab> {
                                   .isNotEmpty) ...[
                                 const SizedBox(height: 12),
                                 Text(event['description'].toString()),
+                              ],
+                              if ((event['external_url'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      final uri = Uri.tryParse(
+                                        event['external_url'].toString(),
+                                      );
+                                      if (uri != null &&
+                                          (uri.scheme == 'https' ||
+                                              uri.scheme == 'http')) {
+                                        await launchUrl(
+                                          uri,
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(
+                                      Icons.open_in_new,
+                                      size: 17,
+                                    ),
+                                    label: const Text('Open event link'),
+                                  ),
+                                ),
                               ],
                             ],
                           ),
