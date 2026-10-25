@@ -292,100 +292,133 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final body = TextEditingController();
     final link = TextEditingController();
     final key = GlobalKey<FormState>();
+    var audience = 'all';
+    const audiences = <String, String>{
+      'all': 'Every user',
+      'android': 'Android users',
+      'ios': 'iOS users',
+      'web': 'Web users',
+      'owners': 'Club owners',
+      'executives': 'Club executives',
+    };
     final send = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Message every MyClub user'),
-        content: SizedBox(
-          width: 460,
-          child: Form(
-            key: key,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(ctx).colorScheme.primaryContainer
-                          .withValues(alpha: .55),
-                      borderRadius: BorderRadius.circular(12),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Send an admin message'),
+          content: SizedBox(
+            width: 460,
+            child: Form(
+              key: key,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      value: audience,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Recipients',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.groups_outlined),
+                      ),
+                      items: audiences.entries
+                          .map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text(e.value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null)
+                          setDialogState(() => audience = value);
+                      },
                     ),
-                    child: const Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.campaign_outlined),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'This sends an in-app message to every registered MyClub account, including accounts that are not in the current search results.',
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(ctx).colorScheme.primaryContainer
+                            .withValues(alpha: .55),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.campaign_outlined),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Send an in-app message to ${audiences[audience]!.toLowerCase()}. Platform targeting uses each account’s most recently recorded MyClub platform.',
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: title,
-                    maxLength: 100,
-                    decoration: const InputDecoration(
-                      labelText: 'Message title',
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      controller: title,
+                      maxLength: 100,
+                      decoration: const InputDecoration(
+                        labelText: 'Message title',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Enter a title'
+                          : null,
                     ),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Enter a title'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: body,
-                    minLines: 4,
-                    maxLines: 8,
-                    maxLength: 4000,
-                    decoration: const InputDecoration(
-                      labelText: 'Message',
-                      alignLabelWithHint: true,
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: body,
+                      minLines: 4,
+                      maxLines: 8,
+                      maxLength: 4000,
+                      decoration: const InputDecoration(
+                        labelText: 'Message',
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Enter a message'
+                          : null,
                     ),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Enter a message'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: link,
-                    keyboardType: TextInputType.url,
-                    decoration: const InputDecoration(
-                      labelText: 'Optional link',
-                      hintText: 'https://example.com',
-                      prefixIcon: Icon(Icons.link),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: link,
+                      keyboardType: TextInputType.url,
+                      decoration: const InputDecoration(
+                        labelText: 'Optional link',
+                        hintText: 'https://example.com',
+                        prefixIcon: Icon(Icons.link),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: _validateOptionalUrl,
                     ),
-                    validator: _validateOptionalUrl,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'The message appears in each user’s MyClub inbox on launch until acknowledged.',
-                    style: Theme.of(ctx).textTheme.bodySmall,
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Text(
+                      'Messages appear in recipients’ MyClub inbox when they open the app. This does not send an operating-system push notification.',
+                      style: Theme.of(ctx).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                if (key.currentState!.validate()) Navigator.pop(ctx, true);
+              },
+              icon: const Icon(Icons.send),
+              label: const Text('Continue'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              if (key.currentState!.validate()) Navigator.pop(ctx, true);
-            },
-            icon: const Icon(Icons.campaign_outlined),
-            label: const Text('Send to everyone'),
-          ),
-        ],
       ),
     );
     if (send != true) {
@@ -396,7 +429,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
     if (!_canBroadcastFromThisDevice) {
       _toast(
-        'Broadcast announcements can only be sent from the MyClub Android app.',
+        'Admin broadcasts can only be sent from the native MyClub Android app.',
       );
       title.dispose();
       body.dispose();
@@ -407,9 +440,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.campaign_outlined),
-        title: const Text('Send to every user?'),
+        title: Text('Message ${audiences[audience]!.toLowerCase()}?'),
         content: Text(
-          'This will deliver “${title.text.trim()}” to every registered MyClub account. You cannot recall the broadcast after sending.',
+          'This will send “${title.text.trim()}” to ${audiences[audience]!.toLowerCase()}. Messages cannot be recalled after sending.',
         ),
         actions: [
           TextButton(
@@ -419,7 +452,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           FilledButton.icon(
             onPressed: () => Navigator.pop(ctx, true),
             icon: const Icon(Icons.send),
-            label: const Text('Confirm broadcast'),
+            label: const Text('Confirm send'),
           ),
         ],
       ),
@@ -437,11 +470,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           'p_title': title.text.trim(),
           'p_body': body.text.trim(),
           'p_link_url': link.text.trim().isEmpty ? null : link.text.trim(),
+          'p_audience': audience,
         },
       );
-      _toast('Broadcast sent to ${result ?? 'all'} users.');
+      _toast(
+        'Message sent to ${result ?? 0} ${audiences[audience]!.toLowerCase()}.',
+      );
     } catch (e) {
-      _toast('Could not send broadcast: $e');
+      _toast('Could not send message: $e');
     } finally {
       title.dispose();
       body.dispose();
@@ -841,7 +877,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ? null
                   : _broadcastMessage,
               icon: const Icon(Icons.campaign_outlined),
-              label: const Text('Message every user'),
+              label: const Text('Send admin message'),
             ),
           ),
         ),
@@ -851,8 +887,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             alignment: Alignment.centerLeft,
             child: Text(
               _canBroadcastFromThisDevice
-                  ? 'Broadcast announcements are enabled on the Android app only. You can send private messages from any platform.'
-                  : 'To send a broadcast announcement, open the native MyClub Android app. Private messages remain available on this platform.',
+                  ? 'Choose all users, a platform, club owners, or club executives for each broadcast.'
+                  : 'Admin broadcasts can be sent from the native MyClub Android app.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),

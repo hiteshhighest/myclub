@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -39,6 +40,18 @@ class _AuthGateState extends State<AuthGate> {
   /// Ensures every authenticated account has a profile row. Google usually
   /// supplies `full_name` / `name`, not the app's custom `display_name` key.
   /// Existing non-empty display names are deliberately preserved.
+  String get _appPlatform {
+    if (kIsWeb) return 'web';
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.iOS:
+        return 'ios';
+      default:
+        return 'other';
+    }
+  }
+
   Future<void> _ensureProfile(User user) async {
     if (!_syncingUserIds.add(user.id)) return;
 
@@ -71,6 +84,8 @@ class _AuthGateState extends State<AuthGate> {
           'id': user.id,
           'display_name': suggestedName,
           if (avatar != null) 'avatar_url': avatar,
+          'app_platform': _appPlatform,
+          'platform_last_seen_at': DateTime.now().toUtc().toIso8601String(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         });
         return;
@@ -85,10 +100,14 @@ class _AuthGateState extends State<AuthGate> {
         updates['avatar_url'] = avatar;
       }
 
-      if (updates.isNotEmpty) {
-        updates['updated_at'] = DateTime.now().toUtc().toIso8601String();
-        await _supabase.from('profiles').update(updates).eq('id', user.id);
-      }
+      // Record the platform on each authenticated app launch so admins can
+      // target the audience's most recently used MyClub platform.
+      updates['app_platform'] = _appPlatform;
+      updates['platform_last_seen_at'] = DateTime.now()
+          .toUtc()
+          .toIso8601String();
+      updates['updated_at'] = DateTime.now().toUtc().toIso8601String();
+      await _supabase.from('profiles').update(updates).eq('id', user.id);
     } catch (error, stackTrace) {
       // Do not block sign-in if profile syncing fails; keep details available
       // in the debug console so RLS/schema issues can be diagnosed.
