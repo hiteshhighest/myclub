@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../navigation/main_navigation_screen.dart';
 import 'login_screen.dart';
+import 'reset_password_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -18,6 +19,7 @@ class _AuthGateState extends State<AuthGate> {
   final SupabaseClient _supabase = Supabase.instance.client;
   StreamSubscription<AuthState>? _authSubscription;
   final Set<String> _syncingUserIds = <String>{};
+  bool _recoveringPassword = false;
 
   @override
   void initState() {
@@ -30,6 +32,11 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.passwordRecovery && mounted) {
+        setState(() => _recoveringPassword = true);
+      } else if (state.event == AuthChangeEvent.signedOut && mounted) {
+        setState(() => _recoveringPassword = false);
+      }
       final user = state.session?.user ?? _supabase.auth.currentUser;
       if (user != null) {
         unawaited(_ensureProfile(user));
@@ -43,12 +50,9 @@ class _AuthGateState extends State<AuthGate> {
   String get _appPlatform {
     if (kIsWeb) return 'web';
     switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'android';
-      case TargetPlatform.iOS:
-        return 'ios';
-      default:
-        return 'other';
+      case TargetPlatform.android: return 'android';
+      case TargetPlatform.iOS: return 'ios';
+      default: return 'other';
     }
   }
 
@@ -103,9 +107,7 @@ class _AuthGateState extends State<AuthGate> {
       // Record the platform on each authenticated app launch so admins can
       // target the audience's most recently used MyClub platform.
       updates['app_platform'] = _appPlatform;
-      updates['platform_last_seen_at'] = DateTime.now()
-          .toUtc()
-          .toIso8601String();
+      updates['platform_last_seen_at'] = DateTime.now().toUtc().toIso8601String();
       updates['updated_at'] = DateTime.now().toUtc().toIso8601String();
       await _supabase.from('profiles').update(updates).eq('id', user.id);
     } catch (error, stackTrace) {
@@ -137,6 +139,7 @@ class _AuthGateState extends State<AuthGate> {
     return StreamBuilder<AuthState>(
       stream: _supabase.auth.onAuthStateChange,
       builder: (context, snapshot) {
+        if (_recoveringPassword) return const ResetPasswordScreen();
         final session = _supabase.auth.currentSession;
         if (session != null) return const MainNavigationScreen();
         return const LoginScreen();

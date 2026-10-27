@@ -2,8 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../core/theme.dart';
-
+import 'brand_mark.dart';
 import 'google_auth_button.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -35,11 +34,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    setState(() {
-      loading = true;
-      message = null;
-      success = false;
-    });
+    setState(() { loading = true; message = null; success = false; });
     try {
       final response = await Supabase.instance.client.auth.signUp(
         email: emailController.text.trim(),
@@ -64,11 +59,7 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> googleSignup() async {
-    setState(() {
-      googleLoading = true;
-      message = null;
-      success = false;
-    });
+    setState(() { googleLoading = true; message = null; success = false; });
     await startGoogleSignIn(context);
     if (mounted) setState(() => googleLoading = false);
   }
@@ -107,33 +98,13 @@ class _SignupScreenState extends State<SignupScreen> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Center(
-                      child: Container(
-                        width: 68,
-                        height: 68,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          color: MyClubTheme.brand,
-                        ),
-                        child: const Icon(
-                          Icons.hub_rounded,
-                          color: Colors.white,
-                          size: 34,
-                        ),
-                      ),
-                    ),
+                    const Center(child: BrandMark(size: 74)),
                     const SizedBox(height: 20),
-                    Text(
-                      'Join your community',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
+                    Text('Find your people.', textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineMedium),
                     const SizedBox(height: 8),
-                    Text(
-                      'Create an account and find your people.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+                    Text('Create an account and bring your clubs together.',
+                      textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
                     const SizedBox(height: 26),
                     Card(
                       child: Padding(
@@ -144,9 +115,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             GoogleAuthButton(
                               label: 'Sign up with Google',
                               loading: googleLoading,
-                              onPressed: googleLoading || loading
-                                  ? null
-                                  : googleSignup,
+                              onPressed: googleLoading || loading ? null : googleSignup,
                             ),
                             const SizedBox(height: 20),
                             const _SignupDivider(),
@@ -155,20 +124,14 @@ class _SignupScreenState extends State<SignupScreen> {
                               controller: nameController,
                               textCapitalization: TextCapitalization.words,
                               autofillHints: const [AutofillHints.name],
-                              decoration: const InputDecoration(
-                                labelText: 'Full name',
-                                prefixIcon: Icon(Icons.person_outline_rounded),
-                              ),
+                              decoration: const InputDecoration(labelText: 'Full name', prefixIcon: Icon(Icons.person_outline_rounded)),
                             ),
                             const SizedBox(height: 14),
                             TextField(
                               controller: emailController,
                               keyboardType: TextInputType.emailAddress,
                               autofillHints: const [AutofillHints.email],
-                              decoration: const InputDecoration(
-                                labelText: 'Email address',
-                                prefixIcon: Icon(Icons.mail_outline_rounded),
-                              ),
+                              decoration: const InputDecoration(labelText: 'Email address', prefixIcon: Icon(Icons.mail_outline_rounded)),
                             ),
                             const SizedBox(height: 14),
                             TextField(
@@ -177,54 +140,29 @@ class _SignupScreenState extends State<SignupScreen> {
                               autofillHints: const [AutofillHints.newPassword],
                               decoration: InputDecoration(
                                 labelText: 'Password (8+ characters)',
-                                prefixIcon: const Icon(
-                                  Icons.lock_outline_rounded,
-                                ),
+                                prefixIcon: const Icon(Icons.lock_outline_rounded),
                                 suffixIcon: IconButton(
-                                  onPressed: () => setState(
-                                    () => obscurePassword = !obscurePassword,
-                                  ),
-                                  icon: Icon(
-                                    obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
-                                  ),
+                                  onPressed: () => setState(() => obscurePassword = !obscurePassword),
+                                  icon: Icon(obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
                                 ),
                               ),
                             ),
                             if (message != null) ...[
                               const SizedBox(height: 14),
-                              Text(
-                                message!,
-                                style: TextStyle(
-                                  color: success
-                                      ? colors.primary
-                                      : colors.error,
-                                ),
-                              ),
+                              Text(message!, style: TextStyle(color: success ? colors.primary : colors.error)),
                             ],
                             const SizedBox(height: 20),
                             FilledButton(
-                              onPressed: loading || googleLoading
-                                  ? null
-                                  : signup,
-                              child: Text(
-                                loading
-                                    ? 'Creating account...'
-                                    : 'Create account',
-                              ),
+                              onPressed: loading || googleLoading ? null : signup,
+                              child: Text(loading ? 'Creating account...' : 'Create account'),
                             ),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 18),
-                    Text(
-                      'By continuing, you agree to use MyClub respectfully.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.labelMedium
-                          ?.copyWith(color: colors.onSurfaceVariant),
-                    ),
+                    Text('By continuing, you agree to use MyClub respectfully.',
+                      textAlign: TextAlign.center, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: colors.onSurfaceVariant)),
                   ],
                 ),
               ),
@@ -242,18 +180,10 @@ class _SignupDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.outlineVariant;
-    return Row(
-      children: [
-        Expanded(child: Divider(color: color)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Text(
-            'OR USE EMAIL',
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
-        ),
-        Expanded(child: Divider(color: color)),
-      ],
-    );
+    return Row(children: [
+      Expanded(child: Divider(color: color)),
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('OR USE EMAIL', style: Theme.of(context).textTheme.labelSmall)),
+      Expanded(child: Divider(color: color)),
+    ]);
   }
 }
