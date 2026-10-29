@@ -28,11 +28,10 @@ class MyClubApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MyClub',
+      title: 'Klubb',
       debugShowCheckedModeBanner: false,
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.light,
       theme: MyClubTheme.light,
-      darkTheme: MyClubTheme.dark,
       home: configured
           ? const AuthGate()
           : const Scaffold(
@@ -40,7 +39,7 @@ class MyClubApp extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.all(24),
                   child: Text(
-                    'MyClub setup required.\n'
+                    'Klubb setup required.\n'
                     'Run the app with your Supabase credentials.',
                     textAlign: TextAlign.center,
                   ),

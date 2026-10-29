@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+import '../../widgets/playful_page_banner.dart';
+
 class OpenPositionsScreen extends StatefulWidget {
   final String? clubId;
   final String? clubName;
@@ -199,7 +202,7 @@ class _OpenPositionsScreenState extends State<OpenPositionsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Application submitted. The club can review it in MyClub.',
+            'Application submitted. The club can review it in Klubb.',
           ),
         ),
       );
@@ -382,7 +385,7 @@ class _OpenPositionsScreenState extends State<OpenPositionsScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(
-                  'Could not load open positions. Apply the MyClub feature migration and try again.\n$_error',
+                  'Could not load open positions. Apply the Klubb feature migration and try again.\n$_error',
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -392,8 +395,17 @@ class _OpenPositionsScreenState extends State<OpenPositionsScreen> {
           : Column(
               children: [
                 if (!isManager)
+                  const PlayfulPageBanner(
+                    eyebrow: 'Your next chapter',
+                    title: 'Find your thing!',
+                    subtitle: 'Explore opportunities to learn, build and grow with a team.',
+                    icon: Icons.rocket_launch_rounded,
+                    color: Color(0x35FF8F7A),
+                    accent: MyClubTheme.accentYellow,
+                  ),
+                if (!isManager)
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                     child: TextField(
                       controller: _search,
                       onChanged: (_) => setState(() {}),
@@ -412,7 +424,7 @@ class _OpenPositionsScreenState extends State<OpenPositionsScreen> {
                             child: Text(
                               isManager
                                   ? 'No open positions yet. Tap + to publish one.'
-                                  : 'No open positions right now.',
+                                  : 'No open positions right now. Verified clubs can publish opportunities here, even when their club page is private.',
                               textAlign: TextAlign.center,
                             ),
                           ),
@@ -438,7 +450,7 @@ class _OpenPositionsScreenState extends State<OpenPositionsScreen> {
                                       children: [
                                         const Icon(
                                           Icons.verified,
-                                          color: Colors.teal,
+                                          color: MyClubTheme.accentMint,
                                           size: 18,
                                         ),
                                         const SizedBox(width: 6),
@@ -451,7 +463,7 @@ class _OpenPositionsScreenState extends State<OpenPositionsScreen> {
                                                 .textTheme
                                                 .labelLarge
                                                 ?.copyWith(
-                                                  color: Colors.teal,
+                                                  color: MyClubTheme.accentMint,
                                                   fontWeight: FontWeight.w700,
                                                 ),
                                           ),

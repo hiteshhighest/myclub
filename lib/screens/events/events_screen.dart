@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+import '../../widgets/club_info_card.dart';
+import '../../widgets/playful_page_banner.dart';
+
 import '../clubs/club_detail_screen.dart';
 
 class EventsScreen extends StatefulWidget {
@@ -118,13 +122,39 @@ class _EventsScreenState extends State<EventsScreen> {
     return 'Club';
   }
 
-  String _formatDate(dynamic value) {
-    final date = DateTime.tryParse(value?.toString() ?? '');
-    if (date == null) return 'Date unavailable';
-    final d = date.toLocal();
-    return '${d.day}/${d.month}/${d.year} · '
-        '${d.hour.toString().padLeft(2, '0')}:'
-        '${d.minute.toString().padLeft(2, '0')}';
+  Widget _eventCard(Map<String, dynamic> event) {
+    final clubId = event['club_id'].toString();
+    final start = DateTime.tryParse(event['starts_at']?.toString() ?? '')
+        ?.toLocal();
+    final isPublic =
+        event['visibility'] == 'public' || event['is_public'] == true;
+    final isExec = event['visibility'] == 'executives';
+    final time = start == null
+        ? 'Time unavailable'
+        : '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
+    final loc = (event['location'] ?? '').toString();
+
+    return ClubInfoCard(
+      leading: DateBadge(date: start),
+      clubName: _clubName(clubId),
+      title: event['title']?.toString() ?? 'Untitled event',
+      body: event['description']?.toString(),
+      tags: [
+        if (isPublic)
+          const MiniTag(icon: Icons.public_rounded, label: 'Public')
+        else if (isExec)
+          const MiniTag(
+            icon: Icons.admin_panel_settings_outlined,
+            label: 'Executives',
+            color: MyClubTheme.accentCoral,
+          )
+        else
+          const MiniTag(icon: Icons.groups_2_outlined, label: 'Members'),
+      ],
+      footerIcon: Icons.schedule_rounded,
+      footer: loc.isEmpty ? time : '$time · $loc',
+      onTap: () => _openClub(clubId),
+    );
   }
 
   @override
@@ -144,8 +174,8 @@ class _EventsScreenState extends State<EventsScreen> {
         onRefresh: _loadEvents,
         child: _loading
             ? ListView(
-                physics: AlwaysScrollableScrollPhysics(),
-                children: [
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
                   SizedBox(height: 240),
                   Center(child: CircularProgressIndicator()),
                 ],
@@ -193,82 +223,20 @@ class _EventsScreenState extends State<EventsScreen> {
               )
             : ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                itemCount: _events.length,
+                padding: const EdgeInsets.only(bottom: 16),
+                itemCount: _events.length + 1,
                 itemBuilder: (context, index) {
-                  final event = _events[index];
-                  final clubId = event['club_id'].toString();
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: const CircleAvatar(
-                        child: Icon(Icons.event_available_outlined),
-                      ),
-                      title: Text(
-                        event['title']?.toString() ?? 'Untitled event',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_clubName(clubId)),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 4,
-                              children: [
-                                if (event['visibility'] == 'public' ||
-                                    event['is_public'] == true)
-                                  const Chip(
-                                    avatar: Icon(
-                                      Icons.public_rounded,
-                                      size: 15,
-                                    ),
-                                    label: Text('Public'),
-                                  )
-                                else if (event['visibility'] == 'executives')
-                                  const Chip(
-                                    avatar: Icon(
-                                      Icons.admin_panel_settings_outlined,
-                                      size: 15,
-                                    ),
-                                    label: Text('Executives'),
-                                  )
-                                else
-                                  const Chip(
-                                    avatar: Icon(
-                                      Icons.groups_2_outlined,
-                                      size: 15,
-                                    ),
-                                    label: Text('Club members'),
-                                  ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(_formatDate(event['starts_at'])),
-                            if ((event['location'] ?? '').toString().isNotEmpty)
-                              Text('Location: ${event['location']}'),
-                            if ((event['description'] ?? '')
-                                .toString()
-                                .isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                event['description'].toString(),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _openClub(clubId),
-                    ),
-                  );
+                  if (index == 0) {
+                    return const PlayfulPageBanner(
+                      eyebrow: 'Save the date',
+                      title: 'Good times ahead!',
+                      subtitle: 'Discover what your clubs have planned next.',
+                      icon: Icons.celebration_rounded,
+                      color: Color(0x35FF8F7A),
+                      accent: MyClubTheme.accentYellow,
+                    );
+                  }
+                  return _eventCard(_events[index - 1]);
                 },
               ),
       ),

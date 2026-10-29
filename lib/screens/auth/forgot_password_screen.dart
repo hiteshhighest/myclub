@@ -23,7 +23,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() => error = 'Enter a valid email address.');
       return;
     }
-    setState(() { loading = true; error = null; });
+    setState(() {
+      loading = true;
+      error = null;
+    });
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
@@ -33,7 +36,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } on AuthException catch (e) {
       if (mounted) setState(() => error = e.message);
     } catch (_) {
-      if (mounted) setState(() => error = 'Could not send the reset email. Please try again.');
+      if (mounted)
+        setState(
+          () => error = 'Could not send the reset email. Please try again.',
+        );
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -69,14 +75,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   const SizedBox(height: 12),
                   const Center(child: BrandMark(size: 78)),
                   const SizedBox(height: 28),
-                  Text(sent ? 'Check your inbox' : 'Forgot your password?',
+                  Text(
+                    sent ? 'Check your inbox' : 'Forgot your password?',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium),
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   const SizedBox(height: 10),
                   Text(
                     sent
-                      ? 'If an account exists for that email, we sent a password reset link. Follow it to continue.'
-                      : 'No worries. Enter the email linked to your MyClub account and we’ll send you a reset link.',
+                        ? 'If an account exists for that email, we sent a password reset link. Follow it to continue.'
+                        : 'No worries. Enter the email linked to your Klubb account and we’ll send you a reset link.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
@@ -107,11 +115,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             FilledButton.icon(
                               onPressed: loading ? null : sendResetEmail,
                               icon: const Icon(Icons.mark_email_read_outlined),
-                              label: Text(loading ? 'Sending link…' : 'Send reset link'),
+                              label: Text(
+                                loading ? 'Sending link…' : 'Send reset link',
+                              ),
                             )
                           else
                             OutlinedButton.icon(
-                              onPressed: () => setState(() { sent = false; error = null; }),
+                              onPressed: () => setState(() {
+                                sent = false;
+                                error = null;
+                              }),
                               icon: const Icon(Icons.refresh_rounded),
                               label: const Text('Try another email'),
                             ),

@@ -252,7 +252,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                           Expanded(
                             child: Text(
                               item['visibility'] == 'public'
-                                  ? 'Public event — anyone with a MyClub account can join without becoming a club member.'
+                                  ? 'Public event — anyone with a Klubb account can join without becoming a club member.'
                                   : item['visibility'] == 'executives'
                                   ? 'This event is for club executives only.'
                                   : 'This event is for club members.',
@@ -425,52 +425,82 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: MyClubTheme.brand,
+                borderRadius: BorderRadius.circular(27),
+                color: Color(0x246C63FF),
               ),
-              child: Row(
+              child: Stack(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Stay in the loop',
-                          style: TextStyle(
-                            color: Color(0xEBFFFFFF),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 7),
-                        const Text(
-                          'What’s happening',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 23,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.6,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          '${_items.length} updates from your clubs',
-                          style: const TextStyle(color: Color(0xEBFFFFFF)),
-                        ),
-                      ],
+                  Positioned(
+                    right: -16,
+                    top: -24,
+                    child: Container(
+                      width: 98,
+                      height: 98,
+                      decoration: const BoxDecoration(
+                        color: MyClubTheme.accentYellow,
+                        shape: BoxShape.circle,
+                      ),
                     ),
                   ),
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.16),
-                      borderRadius: BorderRadius.circular(18),
+                  Positioned(
+                    right: 44,
+                    bottom: -38,
+                    child: Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: MyClubTheme.accentCoral.withValues(alpha: .88),
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.campaign_outlined,
-                      color: Colors.white,
-                      size: 26,
-                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'YOUR CLUB UNIVERSE',
+                              style: TextStyle(
+                                color: MyClubTheme.brand,
+                                fontSize: 10,
+                                letterSpacing: 1.1,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 7),
+                            const Text(
+                              'What’s happening?',
+                              style: TextStyle(
+                                color: MyClubTheme.ink,
+                                fontSize: 23,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.6,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              '${_items.length} updates from your clubs',
+                              style: TextStyle(color: MyClubTheme.mutedText),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: MyClubTheme.canvas.withValues(alpha: 0.88),
+                          borderRadius: BorderRadius.circular(21),
+                        ),
+                        child: const Icon(
+                          Icons.campaign_rounded,
+                          color: MyClubTheme.brand,
+                          size: 28,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

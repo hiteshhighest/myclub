@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 
 import '../clubs/club_detail_screen.dart';
+import '../auth/brand_mark.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -343,37 +344,80 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _sectionHeader(String title, IconData icon, {int? count}) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 13),
       child: Row(
         children: [
-          Icon(icon, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 10),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: colors.primaryContainer,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: colors.primary, size: 21),
+          ),
+          const SizedBox(width: 11),
           Expanded(
             child: Text(
               title,
               style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold),
+                  ?.copyWith(fontWeight: FontWeight.w900, letterSpacing: -0.45),
             ),
           ),
           if (count != null)
-            Text('$count', style: Theme.of(context).textTheme.labelLarge),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: colors.surface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: colors.outlineVariant.withValues(alpha: .7),
+                ),
+              ),
+              child: Text(
+                '$count',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _feedEmpty(IconData icon, String message) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Icon(icon, size: 30, color: Theme.of(context).colorScheme.outline),
-            const SizedBox(width: 14),
-            Expanded(child: Text(message)),
-          ],
-        ),
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: .7)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: MyClubTheme.accentYellow.withValues(alpha: .45),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(icon, size: 27, color: MyClubTheme.ink),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -394,15 +438,38 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Column(
-      children: _events.map((event) {
+      children: _events.asMap().entries.map((entry) {
+        final index = entry.key;
+        final event = entry.value;
         final clubId = event['club_id'].toString();
+        final swatches = [
+          MyClubTheme.accentMint,
+          MyClubTheme.accentYellow,
+          Color(0x246C63FF),
+          Color(0x35FF8F7A),
+        ];
+        final tileColor = swatches[index % swatches.length];
 
         return Card(
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: const EdgeInsets.only(bottom: 12),
           clipBehavior: Clip.antiAlias,
           child: ListTile(
-            leading: CircleAvatar(
-              child: const Icon(Icons.event_available_outlined),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 15,
+              vertical: 10,
+            ),
+            leading: Container(
+              width: 52,
+              height: 58,
+              decoration: BoxDecoration(
+                color: tileColor,
+                borderRadius: BorderRadius.circular(17),
+              ),
+              child: const Icon(
+                Icons.event_available_rounded,
+                color: MyClubTheme.ink,
+                size: 25,
+              ),
             ),
             title: Text(
               event['title']?.toString() ?? 'Untitled event',
@@ -417,7 +484,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 4),
                   Text(_eventDate(event['starts_at'])),
                   if ((event['location'] ?? '').toString().isNotEmpty)
-                    Text('📍 ${event['location']}'),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(child: Text(event['location'].toString())),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -445,17 +522,37 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Column(
-      children: _announcements.map((announcement) {
+      children: _announcements.asMap().entries.map((entry) {
+        final index = entry.key;
+        final announcement = entry.value;
         final clubId = announcement['club_id'].toString();
         final pinned = announcement['is_pinned'] == true;
+        final swatches = [
+          Color(0x35FF8F7A),
+          Color(0x246C63FF),
+          MyClubTheme.accentMint,
+          MyClubTheme.accentYellow,
+        ];
 
         return Card(
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: const EdgeInsets.only(bottom: 12),
           clipBehavior: Clip.antiAlias,
           child: ListTile(
-            leading: CircleAvatar(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 15,
+              vertical: 10,
+            ),
+            leading: Container(
+              width: 52,
+              height: 58,
+              decoration: BoxDecoration(
+                color: swatches[index % swatches.length],
+                borderRadius: BorderRadius.circular(17),
+              ),
               child: Icon(
-                pinned ? Icons.push_pin_outlined : Icons.campaign_outlined,
+                pinned ? Icons.push_pin_rounded : Icons.campaign_rounded,
+                color: MyClubTheme.ink,
+                size: 24,
               ),
             ),
             title: Text(
@@ -543,7 +640,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Column(
-      children: _clubs.map((membership) {
+      children: _clubs.asMap().entries.map((entry) {
+        final index = entry.key;
+        final membership = entry.value;
         final club = membership['clubs'];
         final clubName = club is Map
             ? club['name']?.toString() ?? 'Club'
@@ -553,14 +652,23 @@ class _HomeScreenState extends State<HomeScreen> {
             : '';
         final role = membership['role']?.toString() ?? 'member';
 
+        final clubSwatches = [
+          Color(0x246C63FF),
+          MyClubTheme.accentYellow,
+          MyClubTheme.accentMint,
+          Color(0x35FF8F7A),
+        ];
         return Card(
-          margin: const EdgeInsets.only(bottom: 10),
+          margin: const EdgeInsets.only(bottom: 12),
           clipBehavior: Clip.antiAlias,
           child: ListTile(
-            contentPadding: const EdgeInsets.all(12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 9,
+            ),
             leading: CircleAvatar(
-              radius: 26,
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              radius: 27,
+              backgroundColor: clubSwatches[index % clubSwatches.length],
               backgroundImage:
                   club is Map &&
                       (club['logo_url']?.toString().isNotEmpty ?? false)
@@ -572,9 +680,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ? null
                   : Text(
                       clubName.isNotEmpty ? clubName[0].toUpperCase() : 'C',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 19,
+                        color: MyClubTheme.ink,
                       ),
                     ),
             ),
@@ -622,9 +731,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'MyClub',
-          style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const BrandMark(size: 38),
+            const SizedBox(width: 10),
+            Text(
+              'Klubb',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.8,
+                color: MyClubTheme.brand,
+              ),
+            ),
+          ],
         ),
         actions: [
           IconButton(
@@ -656,96 +776,133 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.all(20),
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(22),
+                      clipBehavior: Clip.antiAlias,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: MyClubTheme.brand,
+                        color: Color(0x246C63FF),
+                        borderRadius: BorderRadius.circular(30),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Stack(
                         children: [
-                          Row(
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'MYCLUB',
-                                  style: TextStyle(
-                                    color: Color(0xEBFFFFFF),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.2,
+                          Positioned(
+                            right: -24,
+                            top: -28,
+                            child: Container(
+                              width: 142,
+                              height: 142,
+                              decoration: const BoxDecoration(
+                                color: MyClubTheme.accentYellow,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: 68,
+                            bottom: -38,
+                            child: Container(
+                              width: 105,
+                              height: 105,
+                              decoration: const BoxDecoration(
+                                color: MyClubTheme.accentCoral,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(22),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 11,
+                                    vertical: 7,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: MyClubTheme.canvas.withValues(
+                                      alpha: .82,
+                                    ),
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                  child: const Text(
+                                    'YOUR PEOPLE. YOUR PLACE.',
+                                    style: TextStyle(
+                                      color: MyClubTheme.brand,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 1.1,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.16),
-                                  borderRadius: BorderRadius.circular(15),
+                                const SizedBox(height: 18),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Hey, ',
+                                      style: TextStyle(
+                                        color: MyClubTheme.ink,
+                                        fontSize: 29,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -1.0,
+                                      ),
+                                    ),
+                                    Flexible(
+                                      child: Text(
+                                        displayName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: MyClubTheme.brand,
+                                          fontSize: 29,
+                                          fontWeight: FontWeight.w900,
+                                          letterSpacing: -1.0,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(
-                                  Icons.groups_outlined,
-                                  color: Colors.white,
-                                  size: 24,
+                                const SizedBox(height: 8),
+                                const SizedBox(
+                                  width: 255,
+                                  child: Text(
+                                    'Good things happen when people come together.',
+                                    style: TextStyle(
+                                      color: MyClubTheme.ink,
+                                      height: 1.45,
+                                      fontSize: 14,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 15),
-                          Text(
-                            'Welcome back,',
-                            style: TextStyle(
-                              color: Color(0xEBFFFFFF),
-                              fontSize: 15,
+                                const SizedBox(height: 18),
+                                Row(
+                                  children: [
+                                    _HomeStat(
+                                      value: '${_clubs.length}',
+                                      label: 'Your clubs',
+                                      icon: Icons.groups_rounded,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    _HomeStat(
+                                      value:
+                                          '${_clubs.where((m) => m['role'] == 'owner').length}',
+                                      label: 'You lead',
+                                      icon: Icons.auto_awesome_rounded,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            displayName,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.headlineMedium
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.7,
-                                ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Find your people. Build something together.',
-                            style: TextStyle(
-                              color: Color(0xEBFFFFFF),
-                              height: 1.4,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          Row(
-                            children: [
-                              _HomeStat(
-                                value: '${_clubs.length}',
-                                label: 'Your clubs',
-                                icon: Icons.groups_rounded,
-                              ),
-                              const SizedBox(width: 10),
-                              _HomeStat(
-                                value:
-                                    '${_clubs.where((m) => m['role'] == 'owner').length}',
-                                label: 'You lead',
-                                icon: Icons.stars_rounded,
-                              ),
-                            ],
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
                     Row(
                       children: [
                         Expanded(
                           child: FilledButton.icon(
                             onPressed: _busy ? null : _createClub,
-                            icon: const Icon(Icons.add),
+                            icon: const Icon(Icons.add_rounded),
                             label: const Text('Create club'),
                           ),
                         ),
@@ -753,8 +910,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: _busy ? null : _joinClub,
-                            icon: const Icon(Icons.group_add),
-                            label: const Text('Join club'),
+                            icon: const Icon(Icons.group_add_rounded),
+                            label: const Text('Join a club'),
                           ),
                         ),
                       ],
@@ -763,15 +920,28 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 12),
                       const LinearProgressIndicator(),
                     ],
-                    const SizedBox(height: 30),
-
+                    const SizedBox(height: 28),
                     _sectionHeader(
-                      'My Clubs',
-                      Icons.groups_outlined,
+                      'Your little communities',
+                      Icons.diversity_3_rounded,
                       count: _clubs.length,
                     ),
                     _buildClubs(),
                     const SizedBox(height: 24),
+                    _sectionHeader(
+                      'Coming up',
+                      Icons.event_rounded,
+                      count: _events.length,
+                    ),
+                    _buildEvents(),
+                    const SizedBox(height: 24),
+                    _sectionHeader(
+                      'The latest',
+                      Icons.campaign_rounded,
+                      count: _announcements.length,
+                    ),
+                    _buildAnnouncements(),
+                    const SizedBox(height: 30),
                   ],
                 ),
         ),
@@ -797,13 +967,13 @@ class _HomeStat extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          color: MyClubTheme.canvas.withValues(alpha: 0.88),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: MyClubTheme.canvas.withValues(alpha: 0.95)),
         ),
         child: Row(
           children: [
-            Icon(icon, color: Colors.white, size: 19),
+            Icon(icon, color: MyClubTheme.brand, size: 19),
             const SizedBox(width: 9),
             Expanded(
               child: Column(
@@ -811,9 +981,9 @@ class _HomeStat extends StatelessWidget {
                 children: [
                   Text(
                     value,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                    style: TextStyle(
+                      color: MyClubTheme.ink,
+                      fontWeight: FontWeight.w900,
                       fontSize: 17,
                     ),
                   ),
@@ -822,9 +992,9 @@ class _HomeStat extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Color(0xEBFFFFFF),
+                      color: MyClubTheme.mutedText,
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],

@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+
 /// Starts Supabase's hosted Google OAuth flow.
 /// Configure Google as a provider in Supabase and add the app redirect URLs
 /// listed in GOOGLE_AUTH_SETUP.md to Authentication > URL Configuration.
@@ -82,7 +84,7 @@ class _GoogleMark extends StatelessWidget {
           style: TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w900,
-            color: Color(0xFF4285F4),
+            color: MyClubTheme.brand,
           ),
         ),
       ),

@@ -1,11 +1,11 @@
 {
-    "name": "myclub",
-    "short_name": "myclub",
+    "name": "Klubb",
+    "short_name": "Klubb",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F9F7F1",
+    "theme_color": "#6C63FF",
+    "description": "Klubb brings your clubs, people, and plans together.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

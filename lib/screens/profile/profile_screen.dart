@@ -4,6 +4,9 @@ import 'package:file_picker/file_picker.dart' as picker;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+import '../../widgets/playful_page_banner.dart';
+
 import '../admin/admin_panel_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -236,6 +239,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        const PlayfulPageBanner(
+          eyebrow: 'Your corner',
+          title: 'Your profile, your way',
+          subtitle: 'Keep your details and club visibility up to date.',
+          icon: Icons.face_retouching_natural_rounded,
+          color: Color(0x35A7D7C5),
+          accent: MyClubTheme.accentCoral,
+          margin: EdgeInsets.zero,
+        ),
         Center(
           child: Column(
             children: [
@@ -261,7 +273,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Display name',
                   prefixIcon: Icon(Icons.person_outline),
-                  border: OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
@@ -279,7 +290,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   labelText: 'Bio',
                   hintText: 'Tell people a little about yourself...',
                   alignLabelWithHint: true,
-                  border: OutlineInputBorder(),
                 ),
               ),
             ],
@@ -344,7 +354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               leading: const CircleAvatar(
                 child: Icon(Icons.admin_panel_settings_outlined),
               ),
-              title: const Text('MyClub Control Room'),
+              title: const Text('Klubb Control Room'),
               subtitle: const Text(
                 'Review verification requests, monitor clubs, and message members.',
               ),

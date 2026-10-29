@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+import '../../widgets/club_info_card.dart';
+import '../../widgets/playful_page_banner.dart';
+
 import '../clubs/club_detail_screen.dart';
 
 class AnnouncementsScreen extends StatefulWidget {
@@ -144,13 +148,6 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     }
   }
 
-  void _openProfile(String userId) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => ProfileViewScreen(userId: userId)),
-    );
-  }
-
   String _formatDate(dynamic value) {
     final date = DateTime.tryParse(value?.toString() ?? '');
     if (date == null) return '';
@@ -158,62 +155,46 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
     return '${d.day}/${d.month}/${d.year}';
   }
 
-  Widget _authorRow(Map<String, dynamic> announcement) {
+  String _authorName(Map<String, dynamic> announcement) {
     final profile = announcement['author_profile'] is Map
         ? Map<String, dynamic>.from(announcement['author_profile'] as Map)
         : null;
     final isPublic = profile?['is_profile_public'] != false;
     final rawName = profile?['display_name']?.toString().trim() ?? '';
-    final name = !isPublic
-        ? 'Private profile'
-        : rawName.isEmpty
-        ? 'Club member'
-        : rawName;
-    final authorProfile = profile;
-    final String? avatarUrl;
-    if (isPublic && authorProfile != null) {
-      avatarUrl = authorProfile['avatar_url']?.toString();
-    } else {
-      avatarUrl = null;
-    }
-    final authorId = announcement['created_by']?.toString();
+    if (!isPublic) return 'Private profile';
+    return rawName.isEmpty ? 'Club member' : rawName;
+  }
 
-    return InkWell(
-      onTap: authorId == null || authorId.isEmpty
-          ? null
-          : () => _openProfile(authorId),
-      borderRadius: BorderRadius.circular(24),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 13,
-              backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
-                  ? NetworkImage(avatarUrl)
-                  : null,
-              child: avatarUrl == null || avatarUrl.isEmpty
-                  ? const Icon(Icons.person_outline, size: 15)
-                  : null,
-            ),
-            const SizedBox(width: 7),
-            Flexible(
-              child: Text(
-                'Posted by $name',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: authorId == null || authorId.isEmpty
-                      ? Theme.of(context).colorScheme.onSurfaceVariant
-                      : Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+  Widget _announcementCard(Map<String, dynamic> announcement) {
+    final clubId = announcement['club_id'].toString();
+    final pinned = announcement['is_pinned'] == true;
+    final date = _formatDate(announcement['created_at']);
+    final author = _authorName(announcement);
+
+    return ClubInfoCard(
+      leading: IconTile(
+        icon: pinned ? Icons.push_pin_rounded : Icons.campaign_rounded,
+        color: pinned ? MyClubTheme.accentCoral : null,
       ),
+      clubName: _clubName(clubId),
+      title: announcement['title']?.toString() ?? 'Announcement',
+      body: announcement['body']?.toString(),
+      tags: [
+        if (pinned)
+          const MiniTag(
+            icon: Icons.push_pin_outlined,
+            label: 'Pinned',
+            color: MyClubTheme.accentCoral,
+          ),
+        if (announcement['visibility'] == 'executives')
+          const MiniTag(
+            icon: Icons.admin_panel_settings_outlined,
+            label: 'Executives only',
+          ),
+      ],
+      footerIcon: Icons.edit_outlined,
+      footer: date.isEmpty ? author : '$author · $date',
+      onTap: () => _openClub(clubId),
     );
   }
 
@@ -283,74 +264,20 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
               )
             : ListView.builder(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                itemCount: _announcements.length,
+                padding: const EdgeInsets.only(bottom: 16),
+                itemCount: _announcements.length + 1,
                 itemBuilder: (context, index) {
-                  final announcement = _announcements[index];
-                  final clubId = announcement['club_id'].toString();
-                  final pinned = announcement['is_pinned'] == true;
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: CircleAvatar(
-                        child: Icon(
-                          pinned
-                              ? Icons.push_pin_outlined
-                              : Icons.campaign_outlined,
-                        ),
-                      ),
-                      title: Text(
-                        announcement['title']?.toString() ?? 'Announcement',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_clubName(clubId)),
-                            if (announcement['visibility'] == 'executives')
-                              const Padding(
-                                padding: EdgeInsets.only(top: 6),
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Chip(
-                                    avatar: Icon(
-                                      Icons.admin_panel_settings_outlined,
-                                      size: 16,
-                                    ),
-                                    label: Text('Executive Only'),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 5),
-                            _authorRow(announcement),
-                            const SizedBox(height: 6),
-                            Text(
-                              announcement['body']?.toString() ?? '',
-                              maxLines: 4,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 6),
-                            Text(_formatDate(announcement['created_at'])),
-                            if (pinned)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 6),
-                                child: Text(
-                                  'PINNED',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => _openClub(clubId),
-                    ),
-                  );
+                  if (index == 0) {
+                    return const PlayfulPageBanner(
+                      eyebrow: 'Fresh from your clubs',
+                      title: 'Little updates, big news',
+                      subtitle: 'The things your community wants you to know.',
+                      icon: Icons.mark_chat_unread_rounded,
+                      color: Color(0x35FFD76E),
+                      accent: MyClubTheme.accentCoral,
+                    );
+                  }
+                  return _announcementCard(_announcements[index - 1]);
                 },
               ),
       ),

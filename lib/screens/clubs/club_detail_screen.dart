@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart' as picker;
 
+import '../../core/theme.dart';
 import 'affiliated_clubs_tab.dart';
 import '../positions/open_positions_screen.dart';
 
@@ -187,7 +188,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Your proof is private and visible only to you and the MyClub administrator.',
+                      'Your proof is private and visible only to you and the Klubb administrator.',
                       style: Theme.of(dialogContext).textTheme.bodySmall,
                     ),
                   ],
@@ -959,7 +960,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
             child: ListTile(
               leading: Icon(
                 _isVerifiedClub ? Icons.verified : Icons.verified_outlined,
-                color: _isVerifiedClub ? Colors.teal : null,
+                color: _isVerifiedClub ? MyClubTheme.accentMint : null,
               ),
               title: Text(
                 _isVerifiedClub ? 'Verified club' : 'Club verification',
@@ -972,7 +973,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
                     : 'Submit your social media ID and proof of ownership to unlock public visibility and open positions.',
               ),
               trailing: _isVerifiedClub
-                  ? const Icon(Icons.check_circle, color: Colors.teal)
+                  ? const Icon(
+                      Icons.check_circle,
+                      color: MyClubTheme.accentMint,
+                    )
                   : _verificationRequested
                   ? const Icon(Icons.hourglass_top)
                   : TextButton(
@@ -1001,8 +1005,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
             const SizedBox(height: 4),
             Text(
               _isPublicClub
-                  ? 'Open positions are discoverable by all MyClub users.'
-                  : 'Your club page stays private, but verified-club open positions can still be discovered by all MyClub users.',
+                  ? 'Open positions are discoverable by all Klubb users.'
+                  : 'Your club page stays private, but verified-club open positions can still be discovered by all Klubb users.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -2197,7 +2201,7 @@ class _EventsTabState extends State<_EventsTab> {
                             Expanded(
                               child: Text(
                                 visibility == 'public'
-                                    ? 'Visible to all MyClub users. Anyone can join this event without joining your club.'
+                                    ? 'Visible to all Klubb users. Anyone can join this event without joining your club.'
                                     : visibility == 'executives'
                                     ? 'Only the club owner and executives can see this event.'
                                     : 'Visible to people who are members of this club.',

@@ -20,14 +20,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   Future<void> updatePassword() async {
     if (passwordController.text.length < 8) {
-      setState(() => error = 'Use at least 8 characters for your new password.');
+      setState(
+        () => error = 'Use at least 8 characters for your new password.',
+      );
       return;
     }
     if (passwordController.text != confirmController.text) {
       setState(() => error = 'The passwords do not match.');
       return;
     }
-    setState(() { loading = true; error = null; });
+    setState(() {
+      loading = true;
+      error = null;
+    });
     try {
       await Supabase.instance.client.auth.updateUser(
         UserAttributes(password: passwordController.text),
@@ -36,7 +41,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     } on AuthException catch (e) {
       if (mounted) setState(() => error = e.message);
     } catch (_) {
-      if (mounted) setState(() => error = 'Could not update your password. Request a new reset link and try again.');
+      if (mounted)
+        setState(
+          () => error = 'Could not update your password. Request a new reset link and try again.',
+        );
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -64,15 +72,19 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 children: [
                   const Center(child: BrandMark(size: 78)),
                   const SizedBox(height: 28),
-                  Text(success ? 'Password updated' : 'Create a new password',
+                  Text(
+                    success ? 'Password updated' : 'Create a new password',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineMedium),
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
                   const SizedBox(height: 10),
-                  Text(success
-                    ? 'Your password has been changed. You can continue using MyClub.'
-                    : 'Choose a strong password you have not used before.',
+                  Text(
+                    success
+                        ? 'Your password has been changed. You can continue using Klubb.'
+                        : 'Choose a strong password you have not used before.',
                     textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium),
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   const SizedBox(height: 28),
                   Card(
                     child: Padding(
@@ -87,10 +99,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               autofillHints: const [AutofillHints.newPassword],
                               decoration: InputDecoration(
                                 labelText: 'New password (8+ characters)',
-                                prefixIcon: const Icon(Icons.lock_outline_rounded),
+                                prefixIcon: const Icon(
+                                  Icons.lock_outline_rounded,
+                                ),
                                 suffixIcon: IconButton(
-                                  onPressed: () => setState(() => obscure = !obscure),
-                                  icon: Icon(obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                                  onPressed: () =>
+                                      setState(() => obscure = !obscure),
+                                  icon: Icon(
+                                    obscure
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                  ),
                                 ),
                               ),
                             ),
@@ -112,11 +131,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           if (!success)
                             FilledButton(
                               onPressed: loading ? null : updatePassword,
-                              child: Text(loading ? 'Updating password…' : 'Update password'),
+                              child: Text(
+                                loading
+                                    ? 'Updating password…'
+                                    : 'Update password',
+                              ),
                             )
                           else
                             FilledButton(
-                              onPressed: () => Supabase.instance.client.auth.signOut(),
+                              onPressed: () =>
+                                  Supabase.instance.client.auth.signOut(),
                               child: const Text('Back to sign in'),
                             ),
                         ],

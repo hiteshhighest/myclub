@@ -50,9 +50,12 @@ class _AuthGateState extends State<AuthGate> {
   String get _appPlatform {
     if (kIsWeb) return 'web';
     switch (defaultTargetPlatform) {
-      case TargetPlatform.android: return 'android';
-      case TargetPlatform.iOS: return 'ios';
-      default: return 'other';
+      case TargetPlatform.android:
+        return 'android';
+      case TargetPlatform.iOS:
+        return 'ios';
+      default:
+        return 'other';
     }
   }
 
@@ -70,7 +73,7 @@ class _AuthGateState extends State<AuthGate> {
       final emailName = user.email?.split('@').first.trim();
       final suggestedName = (metadataName?.isNotEmpty ?? false)
           ? metadataName!
-          : ((emailName?.isNotEmpty ?? false) ? emailName! : 'MyClub member');
+          : ((emailName?.isNotEmpty ?? false) ? emailName! : 'Klubb member');
       final avatar = _firstNonEmpty([
         metadata['avatar_url'],
         metadata['picture'],
@@ -107,13 +110,15 @@ class _AuthGateState extends State<AuthGate> {
       // Record the platform on each authenticated app launch so admins can
       // target the audience's most recently used MyClub platform.
       updates['app_platform'] = _appPlatform;
-      updates['platform_last_seen_at'] = DateTime.now().toUtc().toIso8601String();
+      updates['platform_last_seen_at'] = DateTime.now()
+          .toUtc()
+          .toIso8601String();
       updates['updated_at'] = DateTime.now().toUtc().toIso8601String();
       await _supabase.from('profiles').update(updates).eq('id', user.id);
     } catch (error, stackTrace) {
       // Do not block sign-in if profile syncing fails; keep details available
       // in the debug console so RLS/schema issues can be diagnosed.
-      debugPrint('MyClub profile sync failed: $error');
+      debugPrint('Klubb profile sync failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     } finally {
       _syncingUserIds.remove(user.id);

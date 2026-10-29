@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+import '../../widgets/playful_page_banner.dart';
+
 import 'club_detail_screen.dart';
 import '../positions/open_positions_screen.dart';
 
@@ -160,8 +163,16 @@ class _PublicClubsScreenState extends State<PublicClubsScreen> {
       ),
       body: Column(
         children: [
+          const PlayfulPageBanner(
+            eyebrow: 'Find your people',
+            title: 'There’s a club for that!',
+            subtitle: 'Explore communities, meet people and find your next favourite thing.',
+            icon: Icons.diversity_3_rounded,
+            color: Color(0x246C63FF),
+            accent: MyClubTheme.accentYellow,
+          ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: TextField(
               controller: _searchController,
               onChanged: _onSearchChanged,
@@ -283,7 +294,7 @@ class _PublicClubsScreenState extends State<PublicClubsScreen> {
                                                 child: Icon(
                                                   Icons.verified,
                                                   size: 19,
-                                                  color: Colors.teal,
+                                                  color: MyClubTheme.accentMint,
                                                 ),
                                               ),
                                             ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/theme.dart';
+
 class AdminPanelScreen extends StatefulWidget {
   const AdminPanelScreen({super.key});
 
@@ -169,7 +171,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Future<void> _sendMessage(Map<String, dynamic> user) async {
-    final title = TextEditingController(text: 'A message from MyClub');
+    final title = TextEditingController(text: 'A message from Klubb');
     final body = TextEditingController();
     final link = TextEditingController();
     final key = GlobalKey<FormState>();
@@ -273,7 +275,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         },
       );
       _toast(
-        'Private message sent. It will appear when that user opens MyClub.',
+        'Private message sent. It will appear when that user opens Klubb.',
       );
     } catch (e) {
       _toast('Could not send message: $e');
@@ -285,7 +287,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Future<void> _broadcastMessage() async {
-    final title = TextEditingController(text: 'Announcement from MyClub');
+    final title = TextEditingController(text: 'Announcement from Klubb');
     final body = TextEditingController();
     final link = TextEditingController();
     final key = GlobalKey<FormState>();
@@ -347,7 +349,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Send an in-app message to ${audiences[audience]!.toLowerCase()}. Platform targeting uses each account’s most recently recorded MyClub platform.',
+                              'Send an in-app message to ${audiences[audience]!.toLowerCase()}. Platform targeting uses each account’s most recently recorded Klubb platform.',
                             ),
                           ),
                         ],
@@ -394,7 +396,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Messages appear in recipients’ MyClub inbox when they open the app. This does not send an operating-system push notification.',
+                      'Messages appear in recipients’ Klubb inbox when they open the app. This does not send an operating-system push notification.',
                       style: Theme.of(ctx).textTheme.bodySmall,
                     ),
                   ],
@@ -478,7 +480,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('MyClub Control Room'),
+        title: const Text('Klubb Control Room'),
         actions: [
           IconButton(
             tooltip: 'Refresh',
@@ -508,7 +510,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'This account is not authorised to access the MyClub Control Room.',
+                      'This account is not authorised to access the Klubb Control Room.',
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -556,12 +558,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: .16),
+                          color: MyClubTheme.canvas.withValues(alpha: .16),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Icon(
                           Icons.admin_panel_settings_outlined,
-                          color: Colors.white,
+                          color: MyClubTheme.canvas,
                           size: 28,
                         ),
                       ),
@@ -574,7 +576,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               'Admin control room',
                               style: Theme.of(context).textTheme.titleLarge
                                   ?.copyWith(
-                                    color: Colors.white,
+                                    color: MyClubTheme.canvas,
                                     fontWeight: FontWeight.w800,
                                   ),
                             ),
@@ -583,7 +585,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               'Clubs • Verification • User broadcasts',
                               style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(
-                                    color: Colors.white.withValues(alpha: .9),
+                                    color: MyClubTheme.canvas.withValues(
+                                      alpha: .9,
+                                    ),
                                   ),
                             ),
                           ],
@@ -658,13 +662,13 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     children: [
                       CircleAvatar(
                         backgroundColor: verified
-                            ? Colors.teal.withValues(alpha: .12)
+                            ? MyClubTheme.accentMint.withValues(alpha: .35)
                             : Theme.of(context)
                                   .colorScheme
                                   .surfaceContainerHighest,
                         child: Icon(
                           verified ? Icons.verified : Icons.groups_outlined,
-                          color: verified ? Colors.teal : null,
+                          color: verified ? MyClubTheme.ink : null,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -695,19 +699,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     children: [
                       _pill(
                         verified ? 'Verified' : 'Unverified',
-                        verified ? Colors.teal : Colors.orange,
+                        verified
+                            ? MyClubTheme.accentMint
+                            : MyClubTheme.accentCoral,
                       ),
                       _pill(
                         isPublic ? 'Public listing' : 'Private listing',
-                        isPublic ? Colors.blue : Colors.grey,
+                        isPublic
+                            ? MyClubTheme.brand
+                            : MyClubTheme.ink.withValues(alpha: .55),
                       ),
                       _pill(
                         '${club['member_count'] ?? 0} members',
-                        Colors.blueGrey,
+                        MyClubTheme.accentMint,
                       ),
                       _pill(
                         '${club['open_positions_count'] ?? 0} open roles',
-                        Colors.deepPurple,
+                        MyClubTheme.brand,
                       ),
                     ],
                   ),
@@ -770,7 +778,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     children: [
                       const Icon(
                         Icons.verified_user_outlined,
-                        color: Colors.teal,
+                        color: MyClubTheme.accentMint,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -780,7 +788,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                       ),
-                      _pill('Pending', Colors.orange),
+                      _pill('Pending', MyClubTheme.accentCoral),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -910,7 +918,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                           (user['display_name']?.toString().trim().isNotEmpty ??
                                   false)
                               ? user['display_name'].toString()
-                              : 'MyClub user',
+                              : 'Klubb user',
                         ),
                         subtitle: Text(user['email']?.toString() ?? 'No email'),
                         trailing: IconButton(
