@@ -111,20 +111,24 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
       );
       return;
     }
-    setState(() => _savingClubVisibility = true);
+    final previousValue = _isPublicClub;
+    setState(() {
+      _savingClubVisibility = true;
+      _isPublicClub = isPublic;
+    });
     try {
       await _db.rpc(
         'set_my_club_visibility',
         params: {'p_club_id': widget.clubId, 'p_is_public': isPublic},
       );
       if (!mounted) return;
-      setState(() => _isPublicClub = isPublic);
       _message(
         isPublic
             ? 'Your club is now public and can be discovered.'
             : 'Your club is now private. Invite-code joining is required.',
       );
     } catch (error) {
+      if (mounted) setState(() => _isPublicClub = previousValue);
       _message('Could not update club visibility: $error');
     } finally {
       if (mounted) setState(() => _savingClubVisibility = false);
@@ -860,15 +864,36 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
         body: TabBarView(
           children: [
             _buildOverview(theme),
-            _AnnouncementsTab(clubId: widget.clubId, canManage: _isLeader),
-            _EventsTab(
-              clubId: widget.clubId,
-              canManage: _isLeader,
-              isVerifiedClub: _isVerifiedClub,
+            _LazyClubTab(
+              index: 1,
+              child: _AnnouncementsTab(
+                clubId: widget.clubId,
+                canManage: _isLeader,
+              ),
             ),
-            _MembersTab(clubId: widget.clubId, currentUserRole: widget.role),
-            _ClubChatTab(clubId: widget.clubId),
-            AffiliatedClubsTab(clubId: widget.clubId, role: widget.role),
+            _LazyClubTab(
+              index: 2,
+              child: _EventsTab(
+                clubId: widget.clubId,
+                canManage: _isLeader,
+                isVerifiedClub: _isVerifiedClub,
+              ),
+            ),
+            _LazyClubTab(
+              index: 3,
+              child: _MembersTab(
+                clubId: widget.clubId,
+                currentUserRole: widget.role,
+              ),
+            ),
+            _LazyClubTab(index: 4, child: _ClubChatTab(clubId: widget.clubId)),
+            _LazyClubTab(
+              index: 5,
+              child: AffiliatedClubsTab(
+                clubId: widget.clubId,
+                role: widget.role,
+              ),
+            ),
           ],
         ),
       ),
@@ -1149,6 +1174,49 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
   }
 }
 
+class _LazyClubTab extends StatefulWidget {
+  final int index;
+  final Widget child;
+
+  const _LazyClubTab({required this.index, required this.child});
+
+  @override
+  State<_LazyClubTab> createState() => _LazyClubTabState();
+}
+
+class _LazyClubTabState extends State<_LazyClubTab> {
+  TabController? _controller;
+  bool _activated = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = DefaultTabController.of(context);
+    if (_controller == controller) return;
+    _controller?.removeListener(_handleTabChange);
+    _controller = controller;
+    _controller!.addListener(_handleTabChange);
+    _handleTabChange();
+  }
+
+  void _handleTabChange() {
+    if (_activated || _controller?.index != widget.index || !mounted) return;
+    setState(() => _activated = true);
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_handleTabChange);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_activated) return widget.child;
+    return const SizedBox.shrink();
+  }
+}
+
 // -----------------------------------------------------------------------------
 // ANNOUNCEMENTS AND FILE ATTACHMENTS
 // -----------------------------------------------------------------------------
@@ -1172,6 +1240,11 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
 
   List<Map<String, dynamic>> _items = [];
   Map<String, List<Map<String, dynamic>>> _attachments = {};
+  final ScrollController _scrollController = ScrollController();
+  static const _pageSize = 20;
+  int _page = 0;
+  bool _hasMore = true;
+  bool _loadingMore = false;
 
   bool _loading = true;
   bool _working = false;
@@ -1180,7 +1253,21 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 280) {
+      _load(append: true);
+    }
   }
 
   void _message(String message) {
@@ -1230,24 +1317,46 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
     return '${(bytes / 1024).ceil()} KB';
   }
 
-  Future<void> _load() async {
-    try {
-      final results = await Future.wait([
-        _db
-            .from('announcements')
-            .select()
-            .eq('club_id', widget.clubId)
-            .order('is_pinned', ascending: false)
-            .order('created_at', ascending: false),
-        _db
-            .from('announcement_attachments')
-            .select()
-            .eq('club_id', widget.clubId)
-            .order('created_at'),
-      ]);
+  Future<void> _load({bool append = false}) async {
+    if (append && (!_hasMore || _loadingMore || _loading)) return;
+    if (append) {
+      _loadingMore = true;
+    } else {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _page = 0;
+        _hasMore = true;
+      });
+    }
 
-      final announcements = List<Map<String, dynamic>>.from(results[0]);
-      final attachmentRows = List<Map<String, dynamic>>.from(results[1]);
+    final page = append ? _page + 1 : 0;
+    try {
+      final rows = await _db
+          .from('announcements')
+          .select(
+            'id, club_id, title, body, is_pinned, created_at, created_by, visibility, external_url',
+          )
+          .eq('club_id', widget.clubId)
+          .order('is_pinned', ascending: false)
+          .order('created_at', ascending: false)
+          .range(page * _pageSize, (page + 1) * _pageSize - 1);
+
+      final announcements = List<Map<String, dynamic>>.from(rows);
+      final announcementIds = announcements
+          .map((item) => item['id'].toString())
+          .toList();
+      final attachmentRows = announcementIds.isEmpty
+          ? <Map<String, dynamic>>[]
+          : List<Map<String, dynamic>>.from(
+              await _db
+                  .from('announcement_attachments')
+                  .select(
+                    'announcement_id, storage_path, file_name, mime_type, size_bytes, created_at',
+                  )
+                  .inFilter('announcement_id', announcementIds)
+                  .order('created_at'),
+            );
 
       // Fetch visible author profiles separately so profile RLS rules remain active.
       final authorIds = announcements
@@ -1287,10 +1396,15 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
 
       if (!mounted) return;
 
+      if (!mounted) return;
+
       setState(() {
-        _items = announcements;
-        _attachments = grouped;
+        _items = append ? [..._items, ...announcements] : announcements;
+        _attachments = append ? {..._attachments, ...grouped} : grouped;
+        _page = page;
+        _hasMore = announcements.length == _pageSize;
         _loading = false;
+        _loadingMore = false;
         _error = null;
       });
     } catch (error) {
@@ -1299,6 +1413,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
       setState(() {
         _error = error.toString();
         _loading = false;
+        _loadingMore = false;
       });
     }
   }
@@ -1866,9 +1981,16 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.all(16),
-                    itemCount: _items.length,
+                    itemCount: _items.length + (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
+                      if (index >= _items.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
                       final item = _items[index];
                       final pinned = item['is_pinned'] == true;
                       final id = item['id'].toString();
@@ -2020,17 +2142,36 @@ class _EventsTab extends StatefulWidget {
 
 class _EventsTabState extends State<_EventsTab> {
   final SupabaseClient _db = Supabase.instance.client;
+  final ScrollController _scrollController = ScrollController();
+  static const _pageSize = 20;
 
   List<Map<String, dynamic>> _events = [];
 
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  int _page = 0;
   String? _error;
   bool _working = false;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 280) {
+      _load(append: true);
+    }
   }
 
   void _message(String message) {
@@ -2039,19 +2180,39 @@ class _EventsTabState extends State<_EventsTab> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool append = false}) async {
+    if (append && (!_hasMore || _loadingMore || _loading)) return;
+    if (append) {
+      _loadingMore = true;
+    } else {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _page = 0;
+        _hasMore = true;
+      });
+    }
+
+    final page = append ? _page + 1 : 0;
     try {
       final events = await _db
           .from('club_events')
-          .select()
+          .select(
+            'id, club_id, title, description, starts_at, location, visibility, is_public, external_url',
+          )
           .eq('club_id', widget.clubId)
-          .order('starts_at');
+          .order('starts_at')
+          .range(page * _pageSize, (page + 1) * _pageSize - 1);
 
       if (!mounted) return;
 
       setState(() {
-        _events = List<Map<String, dynamic>>.from(events);
+        final pageEvents = List<Map<String, dynamic>>.from(events);
+        _events = append ? [..._events, ...pageEvents] : pageEvents;
+        _page = page;
+        _hasMore = pageEvents.length == _pageSize;
         _loading = false;
+        _loadingMore = false;
         _error = null;
       });
     } catch (error) {
@@ -2060,6 +2221,7 @@ class _EventsTabState extends State<_EventsTab> {
       setState(() {
         _error = error.toString();
         _loading = false;
+        _loadingMore = false;
       });
     }
   }
@@ -2410,9 +2572,16 @@ class _EventsTabState extends State<_EventsTab> {
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.builder(
+                    controller: _scrollController,
                     padding: const EdgeInsets.all(16),
-                    itemCount: _events.length,
+                    itemCount: _events.length + (_hasMore ? 1 : 0),
                     itemBuilder: (context, index) {
+                      if (index >= _events.length) {
+                        return const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
                       final event = _events[index];
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -2593,24 +2762,57 @@ class _MembersTab extends StatefulWidget {
 
 class _MembersTabState extends State<_MembersTab> {
   final SupabaseClient _db = Supabase.instance.client;
+  final ScrollController _scrollController = ScrollController();
+  static const _pageSize = 40;
 
   List<Map<String, dynamic>> _members = [];
   bool _loading = true;
+  bool _loadingMore = false;
+  bool _hasMore = true;
+  int _page = 0;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_handleScroll);
     _load();
   }
 
-  Future<void> _load() async {
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 280) {
+      _load(append: true);
+    }
+  }
+
+  Future<void> _load({bool append = false}) async {
+    if (append && (!_hasMore || _loadingMore || _loading)) return;
+    if (append) {
+      _loadingMore = true;
+    } else {
+      setState(() {
+        _loading = true;
+        _error = null;
+        _page = 0;
+        _hasMore = true;
+      });
+    }
+
+    final page = append ? _page + 1 : 0;
     try {
       final memberships = await _db
           .from('club_members')
           .select('user_id, role, position, joined_at')
           .eq('club_id', widget.clubId)
-          .order('joined_at');
+          .order('joined_at')
+          .range(page * _pageSize, (page + 1) * _pageSize - 1);
 
       final ids = memberships
           .map((row) => row['user_id'].toString())
@@ -2622,9 +2824,7 @@ class _MembersTabState extends State<_MembersTab> {
       if (ids.isNotEmpty) {
         final profiles = await _db
             .from('profiles')
-            .select(
-              'id, display_name, avatar_url, bio, is_profile_public, show_clubs',
-            )
+            .select('id, display_name, avatar_url')
             .inFilter('id', ids);
 
         for (final profile in profiles) {
@@ -2645,8 +2845,11 @@ class _MembersTabState extends State<_MembersTab> {
       if (!mounted) return;
 
       setState(() {
-        _members = merged;
+        _members = append ? [..._members, ...merged] : merged;
+        _page = page;
+        _hasMore = merged.length == _pageSize;
         _loading = false;
+        _loadingMore = false;
         _error = null;
       });
     } catch (error) {
@@ -2655,6 +2858,7 @@ class _MembersTabState extends State<_MembersTab> {
       setState(() {
         _error = error.toString();
         _loading = false;
+        _loadingMore = false;
       });
     }
   }
@@ -2749,9 +2953,16 @@ class _MembersTabState extends State<_MembersTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        controller: _scrollController,
         padding: const EdgeInsets.all(16),
-        itemCount: _members.length,
+        itemCount: _members.length + (_hasMore ? 1 : 0),
         itemBuilder: (context, index) {
+          if (index >= _members.length) {
+            return const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
           final member = _members[index];
           final profile = member['profile'] as Map<String, dynamic>;
           final name = profile['display_name']?.toString().trim();

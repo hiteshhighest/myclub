@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/supabase_cache.dart';
 import '../../core/theme.dart';
+import '../../widgets/loading_skeleton.dart';
 
 import '../clubs/club_detail_screen.dart';
 import '../auth/brand_mark.dart';
@@ -31,7 +35,26 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadHome();
   }
 
-  Future<void> _loadHome() async {
+  Future<void> _loadHome({bool forceRefresh = false}) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _error = 'Please log in again.');
+      return;
+    }
+
+    final cache = SupabaseCache.instance;
+    if (!forceRefresh && cache.hasFreshMemberships(user.id)) {
+      final cachedClubs = await cache.getMemberships(_supabase, user.id);
+      if (!mounted) return;
+      setState(() {
+        _clubs = cachedClubs;
+        _loading = false;
+        _error = null;
+      });
+      unawaited(_loadHome(forceRefresh: true));
+      return;
+    }
+
     if (mounted) {
       setState(() {
         _loading = true;
@@ -41,21 +64,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) throw Exception('Please log in again.');
-
-      final result = await _supabase
-          .from('club_members')
-          .select(
-            'club_id, role, joined_at, '
-            'clubs(id, name, description, logo_url)',
-          )
-          .eq('user_id', user.id)
-          .order('joined_at', ascending: false);
-
-      final clubs = (result as List)
-          .map((row) => Map<String, dynamic>.from(row as Map))
-          .toList();
+      final clubs = await cache.getMemberships(
+        _supabase,
+        user.id,
+        forceRefresh: forceRefresh,
+      );
 
       final clubIds = clubs
           .map((item) => item['club_id'].toString())
@@ -241,8 +254,11 @@ class _HomeScreenState extends State<HomeScreen> {
       );
 
       if (!mounted) return;
+      SupabaseCache.instance.invalidateMemberships(
+        _supabase.auth.currentUser!.id,
+      );
       _message('Club created successfully!');
-      await _loadHome();
+      await _loadHome(forceRefresh: true);
     } catch (e) {
       _message('Could not create club: $e');
     } finally {
@@ -305,8 +321,11 @@ class _HomeScreenState extends State<HomeScreen> {
       await _supabase.rpc('join_club_by_code', params: {'p_code': code});
 
       if (!mounted) return;
+      SupabaseCache.instance.invalidateMemberships(
+        _supabase.auth.currentUser!.id,
+      );
       _message('You joined the club!');
-      await _loadHome();
+      await _loadHome(forceRefresh: true);
     } catch (e) {
       _message('Could not join club: $e');
     } finally {
@@ -717,6 +736,89 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildHomeLoading(String displayName) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(20),
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          decoration: BoxDecoration(
+            color: MyClubTheme.brand.withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: MyClubTheme.brand.withValues(alpha: .12)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'YOUR PEOPLE. YOUR PLACE.',
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: MyClubTheme.brand,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Hey, $displayName',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: MyClubTheme.ink,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text('Good things happen when people come together.'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _busy ? null : _createClub,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Create club'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _joinClub,
+                icon: const Icon(Icons.group_add_rounded),
+                label: const Text('Join a club'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        _sectionHeader('Your little communities', Icons.diversity_3_rounded),
+        const LoadingSkeletonList(
+          itemCount: 2,
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+        ),
+        const SizedBox(height: 16),
+        _sectionHeader('Coming up', Icons.event_rounded),
+        const LoadingSkeletonList(
+          itemCount: 2,
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+        ),
+        const SizedBox(height: 16),
+        _sectionHeader('The latest', Icons.campaign_rounded),
+        const LoadingSkeletonList(
+          itemCount: 2,
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = _supabase.auth.currentUser;
@@ -764,13 +866,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: RefreshIndicator(
           onRefresh: _loadHome,
           child: _loading
-              ? ListView(
-                  physics: AlwaysScrollableScrollPhysics(),
-                  children: [
-                    SizedBox(height: 220),
-                    Center(child: CircularProgressIndicator()),
-                  ],
-                )
+              ? _buildHomeLoading(displayName)
               : ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(20),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/supabase_cache.dart';
 import '../../core/theme.dart';
 
 import '../clubs/club_detail_screen.dart';
@@ -41,15 +42,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
       final user = _db.auth.currentUser;
       if (user == null) throw Exception('Please sign in again.');
 
-      final membershipsRaw = await _db
-          .from('club_members')
-          .select('club_id, role, clubs(id, name, description)')
-          .eq('user_id', user.id);
-
-      final memberships = List<Map<String, dynamic>>.from(
-        (membershipsRaw as List).map(
-          (row) => Map<String, dynamic>.from(row as Map),
-        ),
+      final memberships = await SupabaseCache.instance.getMemberships(
+        _db,
+        user.id,
       );
       final ids = memberships
           .map((m) => m['club_id'].toString())
@@ -272,22 +267,26 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                   onPressed: busy
                       ? null
                       : () async {
+                          final wasJoined = joined;
                           _attendanceBusy.add(eventId);
+                          if (wasJoined) {
+                            _joinedEventIds.remove(eventId);
+                          } else {
+                            _joinedEventIds.add(eventId);
+                          }
                           setDialogState(() {});
                           try {
-                            if (joined) {
+                            if (wasJoined) {
                               await _db
                                   .from('event_attendees')
                                   .delete()
                                   .eq('event_id', eventId)
                                   .eq('user_id', _db.auth.currentUser!.id);
-                              _joinedEventIds.remove(eventId);
                             } else {
                               await _db.from('event_attendees').insert({
                                 'event_id': eventId,
                                 'user_id': _db.auth.currentUser!.id,
                               });
-                              _joinedEventIds.add(eventId);
                             }
                             if (!mounted) return;
                             Navigator.pop(ctx);
@@ -302,7 +301,13 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                             );
                             setState(() {});
                           } catch (error) {
-                            if (mounted)
+                            if (wasJoined) {
+                              _joinedEventIds.add(eventId);
+                            } else {
+                              _joinedEventIds.remove(eventId);
+                            }
+                            if (mounted) {
+                              setDialogState(() {});
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
@@ -310,6 +315,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                                   ),
                                 ),
                               );
+                            }
                           } finally {
                             _attendanceBusy.remove(eventId);
                             if (ctx.mounted) setDialogState(() {});

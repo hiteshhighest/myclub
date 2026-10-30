@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/supabase_cache.dart';
 import '../../core/theme.dart';
 import '../../widgets/club_info_card.dart';
 import '../../widgets/playful_page_banner.dart';
@@ -38,15 +39,9 @@ class _AnnouncementsScreenState extends State<AnnouncementsScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) throw Exception('Please log in again.');
 
-      final memberships = await _supabase
-          .from('club_members')
-          .select('club_id, role, clubs(id, name, description)')
-          .eq('user_id', user.id);
-
-      final clubs = List<Map<String, dynamic>>.from(
-        (memberships as List).map(
-          (row) => Map<String, dynamic>.from(row as Map),
-        ),
+      final clubs = await SupabaseCache.instance.getMemberships(
+        _supabase,
+        user.id,
       );
 
       final clubIds = clubs
