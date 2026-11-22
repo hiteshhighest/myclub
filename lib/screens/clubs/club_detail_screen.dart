@@ -38,6 +38,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
   bool _isPublicClub = false;
   bool _isVerifiedClub = false;
   bool _verificationRequested = false;
+  bool _muteClubNotifications = false;
+  bool _loadingNotificationPreference = true;
+  bool _savingNotificationPreference = false;
+  bool _notificationPreferenceLoadFailed = false;
 
   late String _clubName;
   late String _clubDescription;
@@ -57,6 +61,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
     _clubDescription = widget.description;
     _loadPosition();
     _loadClubDetails();
+    _loadNotificationPreference();
   }
 
   @override
@@ -100,6 +105,81 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
     } catch (_) {
       // Keep the values supplied by the parent if the optional logo column
       // has not been added to the database yet.
+    }
+  }
+
+  Future<void> _loadNotificationPreference() async {
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null) {
+      if (mounted) {
+        setState(() {
+          _loadingNotificationPreference = false;
+          _notificationPreferenceLoadFailed = true;
+        });
+      }
+      return;
+    }
+
+    try {
+      final preference = await _db
+          .from('club_notification_preferences')
+          .select('muted')
+          .eq('user_id', userId)
+          .eq('club_id', widget.clubId)
+          .maybeSingle();
+      if (!mounted) return;
+      setState(() {
+        _muteClubNotifications = preference?['muted'] == true;
+        _notificationPreferenceLoadFailed = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _notificationPreferenceLoadFailed = true);
+      _message('Could not load this club’s notification setting: $error');
+    } finally {
+      if (mounted) setState(() => _loadingNotificationPreference = false);
+    }
+  }
+
+  Future<void> _setClubNotificationsMuted(bool muted) async {
+    if (_savingNotificationPreference || _notificationPreferenceLoadFailed) {
+      return;
+    }
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null) {
+      _message('Sign in to change this club’s notification setting.');
+      return;
+    }
+
+    final previousValue = _muteClubNotifications;
+    setState(() {
+      _savingNotificationPreference = true;
+      _muteClubNotifications = muted;
+    });
+    try {
+      await _db.from('club_notification_preferences').upsert(
+        {
+          'user_id': userId,
+          'club_id': widget.clubId,
+          'muted': muted,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        onConflict: 'user_id,club_id',
+      );
+      if (mounted) {
+        _message(
+          muted
+              ? 'Push notifications from this club are muted.'
+              : 'Push notifications from this club are on.',
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _muteClubNotifications = previousValue);
+        _message('Could not update this club’s notification setting: $error');
+      }
+    } finally {
+      if (mounted) setState(() => _savingNotificationPreference = false);
     }
   }
 
@@ -1037,6 +1117,52 @@ class _ClubDetailScreenState extends State<ClubDetailScreen> {
           ],
         ],
         const SizedBox(height: 24),
+        Card(
+          child: SwitchListTile.adaptive(
+            value: _muteClubNotifications,
+            onChanged:
+                _loadingNotificationPreference ||
+                    _savingNotificationPreference ||
+                    _notificationPreferenceLoadFailed
+                ? null
+                : _setClubNotificationsMuted,
+            title: const Text('Mute club notifications'),
+            subtitle: Text(
+              _loadingNotificationPreference
+                  ? 'Loading your setting…'
+                  : _muteClubNotifications
+                  ? 'Push alerts are off. You can still see club updates in Klubb.'
+                  : 'Get push alerts for this club’s announcements, events, and chat.',
+            ),
+            secondary: _savingNotificationPreference
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    _muteClubNotifications
+                        ? Icons.notifications_off_outlined
+                        : Icons.notifications_active_outlined,
+                  ),
+          ),
+        ),
+        if (_notificationPreferenceLoadFailed)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  _loadingNotificationPreference = true;
+                  _notificationPreferenceLoadFailed = false;
+                });
+                _loadNotificationPreference();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry notification setting'),
+            ),
+          ),
+        const SizedBox(height: 8),
         Card(
           child: ListTile(
             leading: const Icon(Icons.badge_outlined),

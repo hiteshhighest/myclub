@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/push_notification_service.dart';
 import 'brand_mark.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
@@ -139,8 +140,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             )
                           else
                             FilledButton(
-                              onPressed: () =>
-                                  Supabase.instance.client.auth.signOut(),
+                              onPressed: () async {
+                                await PushNotificationService.instance
+                                    .unregisterCurrentToken();
+                                await Supabase.instance.client.auth.signOut();
+                              },
                               child: const Text('Back to sign in'),
                             ),
                         ],

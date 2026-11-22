@@ -37,6 +37,9 @@ dependencies:
   supabase_flutter: ^2.18.3
   file_picker: 10.3.7
   url_launcher: ^6.3.3
+  firebase_core: ^5.2.0
+  firebase_messaging: ^17.1.0
+  flutter_local_notifications: ^23.0.3
 
 dev_dependencies:
   flutter_test:

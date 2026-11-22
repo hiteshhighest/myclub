@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/push_notification_service.dart';
 import '../../core/supabase_cache.dart';
 import '../../core/theme.dart';
 import '../../widgets/loading_skeleton.dart';
@@ -336,6 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _signOut() async {
     try {
+      await PushNotificationService.instance.unregisterCurrentToken();
       await _supabase.auth.signOut();
     } catch (e) {
       _message('Could not sign out: $e');

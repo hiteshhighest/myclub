@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/push_notification_service.dart';
 import '../navigation/main_navigation_screen.dart';
 import 'login_screen.dart';
 import 'reset_password_screen.dart';
@@ -29,6 +30,9 @@ class _AuthGateState extends State<AuthGate> {
     final currentUser = _supabase.auth.currentUser;
     if (currentUser != null) {
       unawaited(_ensureProfile(currentUser));
+      unawaited(
+        PushNotificationService.instance.registerForUser(currentUser.id),
+      );
     }
 
     _authSubscription = _supabase.auth.onAuthStateChange.listen((state) {
@@ -40,6 +44,7 @@ class _AuthGateState extends State<AuthGate> {
       final user = state.session?.user ?? _supabase.auth.currentUser;
       if (user != null) {
         unawaited(_ensureProfile(user));
+        unawaited(PushNotificationService.instance.registerForUser(user.id));
       }
     });
   }

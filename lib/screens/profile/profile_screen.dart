@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart' as picker;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/push_notification_service.dart';
 import '../../core/theme.dart';
 import '../../widgets/playful_page_banner.dart';
 
@@ -248,6 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           accent: MyClubTheme.accentCoral,
           margin: EdgeInsets.zero,
         ),
+        const SizedBox(height: 16),
         Center(
           child: Column(
             children: [
@@ -370,6 +372,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onPressed: _saving
               ? null
               : () async {
+                  await PushNotificationService.instance
+                      .unregisterCurrentToken();
                   await _supabase.auth.signOut();
                 },
           icon: const Icon(Icons.logout),
