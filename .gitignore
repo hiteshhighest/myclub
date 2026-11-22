@@ -1,57 +1,118 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-
-# Android signing credentials
-*.jks
-*.keystore
-key.properties
-
-# Signing-related files
-android/key.properties
-
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
+# Dart and Flutter
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
+.packages
 .pub-cache/
 .pub/
 /build/
 /coverage/
-
-# Symbolication related
+/doc/api/
+**/doc/api/
+*.symbols
+*.map.json
 app.*.symbols
-
-# Obfuscation related
 app.*.map.json
+.flutter-bootstrapped
+.last_build_id
+.metadata.tmp
 
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-.widget_preview/
+# Flutter generated plugin registrants (platform-specific ignore files may override)
+# Keep committed platform registrants when they are part of the project setup.
 
+# IDEs and editors
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.fleet/
+*.swp
+*.swo
+*~
 
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+.tmp/
+tmp/
+.cache/
+
+# Firebase local state and generated hosting cache
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Supabase local state and generated secrets
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+
+# Environment files and local configuration secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.env
+*.local
 supabase_config.json
+secrets/
+secret/
+credentials/
+
+# Private keys, certificates, signing material, and service account files
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+key.properties
+android/key.properties
+service-account*.json
+*-service-account*.json
+*serviceAccount*.json
+google-services.json
+GoogleService-Info.plist
+
+# Android / Gradle
+.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# Xcode / CocoaPods
+Pods/
+**/Pods/
+**/.symlinks/
+DerivedData/
+*.xcuserstate
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.hmap
+
+# Swift package and build output
+.build/
+.buildlog/
+.swiftpm/
+
+# Miscellaneous generated / migration artifacts
+.widget_preview/
+.history/
+.svn/
+migrate_working_dir/
